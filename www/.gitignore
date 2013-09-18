@@ -33,6 +33,7 @@ hdwiki/uploads
 media
 sky
 uc/data/install.lock
+uc/data/upgrade.lock
 apc.php
 test.php
 piwik
