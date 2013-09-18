@@ -1,9 +1,16 @@
 # For ygclub #
 answer/config.php
 bbs/config.inc.php
+old_bbs/config.inc.php
 bbs/forumdata/*.lock
 bbs/forumdata/threadcaches/*
+bbs/data/cache/*
+bbs/data/template/*
+bbs/data/log/*
+bbs/data/*.lock
 bbs/uc_client/data/cache/*
+bbs/config/config_ucenter.php
+bbs/config/config_global.php
 uc/data/config.inc.php
 hdwiki/api/ucconfig.inc.php
 hdwiki/config.php
