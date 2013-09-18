@@ -500,6 +500,7 @@ function get_dumpfile_by_path($path) {
 }
 
 function api_msg($code, $msg) {
+	$msg = htmlspecialchars($msg);
 	$out = "<root>\n";
 	$out .= "\t<error errorCode=\"".constant(strtoupper($code))."\" errorMessage=\"$msg\" />\n";
 	$out .= "\t<fileinfo>\n";
@@ -651,8 +652,8 @@ function fetchtablelist($tablepre = '') {
 	global $db;
 	$arr = explode('.', $tablepre);
 	$dbname = isset($arr[1]) && $arr[1] ? $arr[0] : '';
+	$tablepre = str_replace('_', '\_', $tablepre);
 	$sqladd = $dbname ? " FROM $dbname LIKE '$arr[1]%'" : "LIKE '$tablepre%'";
-	!$tablepre && $tablepre = '*';
 	$tables = $table = array();
 	$query = $db->query("SHOW TABLE STATUS $sqladd");
 	while($table = $db->fetch_array($query)) {

@@ -4,11 +4,11 @@
 	[UCenter] (C)2001-2009 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: admin.php 918 2009-01-21 01:24:29Z zhaoxiongfei $
+	$Id: admin.php 1016 2010-09-20 07:25:57Z cnteacher $
 */
 
-define('UC_SERVER_VERSION', '1.5.0');
-define('UC_SERVER_RELEASE', '20090121');
+define('UC_SERVER_VERSION', '1.5.2');
+define('UC_SERVER_RELEASE', '20101001');
 
 error_reporting(0);
 set_magic_quotes_runtime(0);
@@ -36,8 +36,10 @@ require UC_DATADIR.'config.inc.php';
 require UC_ROOT.'model/base.php';
 require UC_ROOT.'model/admin.php';
 
-$m = empty($_REQUEST['m']) ? 'frame' : $_REQUEST['m'];
-$a = empty($_REQUEST['a']) ? 'index' : $_REQUEST['a'];
+$m = getgpc('m');
+$a = getgpc('a');
+$m = empty($m) ? 'frame' : $m;
+$a = empty($a) ? 'index' : $a;
 
 define('RELEASE_ROOT', '');
 
@@ -64,7 +66,7 @@ function daddslashes($string, $force = 0, $strip = FALSE) {
 	if(!MAGIC_QUOTES_GPC || $force) {
 		if(is_array($string)) {
 			foreach($string as $key => $val) {
-				$string[$key] = daddslashes($val, $force);
+				$string[$key] = daddslashes($val, $force, $strip);
 			}
 		} else {
 			$string = addslashes($strip ? stripslashes($string) : $string);

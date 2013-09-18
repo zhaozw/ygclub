@@ -4,7 +4,7 @@
 	[UCenter] (C)2001-2009 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: admin.php 753 2008-11-14 06:48:25Z cnteacher $
+	$Id: admin.php 996 2010-05-18 09:13:50Z zhaoxiongfei $
 */
 
 !defined('IN_UC') && exit('Access Denied');
@@ -25,10 +25,9 @@ class adminbase extends base {
 		$this->view->assign('sid', $this->view->sid);
 		$this->view->assign('iframe', getgpc('iframe'));
 		$a = getgpc('a');
-		if(getgpc('m') !='user' && $a != 'login' && $a != 'logout') {
+		if(!(getgpc('m') =='user' && ($a == 'login' || $a == 'logout'))) {
 			$this->check_priv();
 		}
-		
 	}
 
 	function check_priv() {
