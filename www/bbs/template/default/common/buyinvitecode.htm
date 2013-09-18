@@ -26,7 +26,7 @@
 					<h3 class="xs2">{lang invitecode_buycode}</h3>
 				</div>
 				<div class="bm_c">
-					<form id="confirmform" class="postbox" method="post" autocomplete="off" action="misc.php?mod=buyinvitecode" onsubmit="ajaxpost(this.id, 'return_addfundsform');">
+					<form id="confirmform" class="postbox" method="post" autocomplete="off" action="misc.php?mod=buyinvitecode" onsubmit="ajaxpost(this.id, 'return_addfundsform');return false;">
 						<input type="hidden" name="formhash" value="{FORMHASH}" />
 						<input type="hidden" name="buysubmit" value="true" />
 						<input type="hidden" name="handlekey" value="buyinvite" />
@@ -63,12 +63,26 @@
 								<tr>
 									<th>{lang trade_type}</th>
 									<td>
-										<!--{if $_G[setting][ec_tenpay_bargainor] || $_G[setting][ec_tenpay_opentrans_chnid]}-->
-											<label for="apitype_tenpay" class="lb"><input type="radio" name="apitype" id="apitype_tenpay" class="pr vm" value="tenpay" checked="checked" /><img title="{lang apitype_tenpay}" alt="{lang apitype_tenpay}" onclick="$('apitype_tenpay').checked=true" src="{STATICURL}image/common/tenpay_logo.gif" class="vm" /></label>
+										<!--{if $_G[setting][ec_ratio] && ($_G[setting][ec_tenpay_bargainor] || $_G[setting][ec_tenpay_opentrans_chnid])}-->
+											<div class="mbm pbn bbda cl">
+												<div id="div#tenpayBankList"></div><span id="#bank_type_value"></span>
+												<link rel="stylesheet" type="text/css" href="http://union.tenpay.com/bankList/css_col3.css" />
+												<script type="text/javascript">
+													$('div#tenpayBankList').html = function(){$('div#tenpayBankList').innerHTML = htmlString; };
+													$("#bank_type_value").val = function(){{if $_G[setting][card][open]}$('cardbox').style.display='none';if($('card_box_sec')){$('card_box_sec').style.display='none';}$('paybox').style.display='';{/if}};
+													appendscript('http://union.tenpay.com/bankList/bank.js', '');
+												</script>
+											</div>
 										<!--{/if}-->
-										<!--{if $_G[setting][ec_account]}-->
-											<label for="apitype_alipay" class="lb"><input type="radio" name="apitype" id="apitype_alipay" class="pr vm" value="alipay" {if !($_G[setting][ec_tenpay_bargainor] || $_G[setting][ec_tenpay_opentrans_chnid])}checked="checked"{/if} /><img title="{lang apitype_alipay}" alt="{lang apitype_alipay}" onclick="$('apitype_alipay').checked=true" src="{STATICURL}image/common/alipay_logo.gif" class="vm" /></label>
-										<!--{/if}-->
+										<div class="long-logo mbw">
+											<ul>
+											<!--{if $_G[setting][ec_ratio] && $_G[setting][ec_account]}-->
+												<li class="z">
+													<input name="bank_type" type="radio" value="alipay" id="apitype_alipay" $ecchecked /><label style="width:135px;height:32px;background: #FFF url({STATICURL}image/common/alipay_logo.gif) no-repeat;border: 1px solid #DDD;vertical-align: middle;position: relative;display: inline-block;background-color: white;" for="apitype_alipay"></label>
+												</li>
+											<!--{/if}-->
+											</ul>
+										</div>
 									</td>
 								</tr>
 							</table>

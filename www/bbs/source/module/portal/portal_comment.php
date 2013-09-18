@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: portal_comment.php 20078 2011-02-12 07:23:38Z monkey $
+ *      $Id: portal_comment.php 31470 2012-08-31 03:29:50Z zhangguosheng $
  */
 
 if(!defined('IN_DISCUZ')) {
@@ -18,15 +18,14 @@ if(empty($id)) {
 	showmessage('comment_no_'.$idtype.'_id');
 }
 if($idtype == 'aid') {
-	$csubject = DB::fetch_first("SELECT a.title, a.allowcomment, ac.commentnum
-		FROM ".DB::table('portal_article_title')." a
-		LEFT JOIN ".DB::table('portal_article_count')." ac
-		ON ac.aid=a.aid
-		WHERE a.aid='$id'");
-	$url = 'portal.php?mod=view&aid='.$id;
+	$csubject = C::t('portal_article_title')->fetch($id);
+	if($csubject) {
+		$csubject = array_merge($csubject, C::t('portal_article_count')->fetch($id));
+	}
+	$url = fetch_article_url($csubject);
 } elseif($idtype == 'topicid') {
-	$csubject = DB::fetch_first("SELECT title, allowcomment, commentnum	FROM ".DB::table('portal_topic')." WHERE topicid='$id'");
-	$url = 'portal.php?mod=topic&topicid='.$id;
+	$csubject = C::t('portal_topic')->fetch($id);
+	$url = fetch_topic_url($csubject);
 }
 if(empty($csubject)) {
 	showmessage('comment_'.$idtype.'_no_exist');
@@ -44,10 +43,9 @@ $multi = '';
 
 if($csubject['commentnum']) {
 	$pricount = 0;
-	$query = DB::query("SELECT * FROM ".DB::table('portal_comment')." WHERE id='$id' AND idtype='$idtype' ORDER BY dateline DESC LIMIT $start,$perpage");
-	while ($value = DB::fetch($query)) {
+	$query = C::t('portal_comment')->fetch_all_by_id_idtype($id, $idtype, 'dateline', 'DESC', $start, $perpage);
+	foreach($query as $value) {
 		if($value['status'] == 0 || $value['uid'] == $_G['uid'] || $_G['adminid'] == 1) {
-			$value['allowop'] = 1;
 			$commentlist[] = $value;
 		} else {
 			$pricount ++;

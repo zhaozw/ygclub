@@ -4,13 +4,13 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: block_grouptrade.php 11418 2010-06-02 02:28:01Z xupeng $
+ *      $Id: block_grouptrade.php 32768 2013-03-07 09:40:05Z zhangguosheng $
  */
 
 if(!defined('IN_DISCUZ')) {
 	exit('Access Denied');
 }
-class block_grouptrade {
+class block_grouptrade extends discuz_block {
 	var $setting = array();
 
 	function block_grouptrade(){
@@ -115,6 +115,7 @@ class block_grouptrade {
 
 	function fields() {
 		return array(
+				'id' => array('name' => lang('blockclass', 'blockclass_field_id'), 'formtype' => 'text', 'datatype' => 'int'),
 				'url' => array('name' => lang('blockclass', 'blockclass_grouptrade_field_url'), 'formtype' => 'text', 'datatype' => 'string'),
 				'title' => array('name' => lang('blockclass', 'blockclass_grouptrade_field_title'), 'formtype' => 'title', 'datatype' => 'title'),
 				'pic' => array('name' => lang('blockclass', 'blockclass_grouptrade_field_pic'), 'formtype' => 'pic', 'datatype' => 'pic'),
@@ -154,10 +155,6 @@ class block_grouptrade {
 			}
 		}
 		return $settings;
-	}
-
-	function cookparameter($parameter) {
-		return $parameter;
 	}
 
 	function getdata($style, $parameter) {
@@ -298,7 +295,7 @@ class block_grouptrade {
 				$posttable = $key == 0 ? 'forum_post' : 'forum_post_'.$key;
 				$query = DB::query("SELECT pid, message FROM ".DB::table($posttable)." WHERE pid IN  (".dimplode($var).")");
 				while($result = DB::fetch($query)) {
-					$list[$result['pid']]['summary'] = messagecutstr($result['message'], $messagelength);
+					$list[$result['pid']]['summary'] = messagecutstr($result['message'], $summarylength, '');
 				}
 			}
 

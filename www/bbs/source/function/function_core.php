@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: function_core.php 32277 2012-12-13 08:25:50Z zhangjie $
+ *      $Id: function_core.php 33508 2013-06-27 03:58:47Z jeffjzhang $
  */
 
 if(!defined('IN_DISCUZ')) {
@@ -14,95 +14,38 @@ if(!defined('IN_DISCUZ')) {
 define('DISCUZ_CORE_FUNCTION', true);
 
 function system_error($message, $show = true, $save = true, $halt = true) {
-	require_once libfile('class/error');
 	discuz_error::system_error($message, $show, $save, $halt);
 }
 
-function updatesession($force = false) {
-
-	global $_G;
-	static $updated = false;
-
-	if(!$updated) {
-		if($_G['uid']) {
-			if($_G['cookie']['ulastactivity']) {
-				$ulastactivity = authcode($_G['cookie']['ulastactivity'], 'DECODE');
-			} else {
-				$ulastactivity = getuserprofile('lastactivity');
-				dsetcookie('ulastactivity', authcode($ulastactivity, 'ENCODE'), 31536000);
-			}
-		}
-		$discuz = & discuz_core::instance();
-		$oltimespan = $_G['setting']['oltimespan'];
-		$lastolupdate = $discuz->session->var['lastolupdate'];
-		if($_G['uid'] && $oltimespan && TIMESTAMP - ($lastolupdate ? $lastolupdate : $ulastactivity) > $oltimespan * 60) {
-			DB::query("UPDATE ".DB::table('common_onlinetime')."
-				SET total=total+'$oltimespan', thismonth=thismonth+'$oltimespan', lastupdate='" . TIMESTAMP . "'
-				WHERE uid='{$_G['uid']}'");
-			if(!DB::affected_rows()) {
-				DB::insert('common_onlinetime', array(
-					'uid' => $_G['uid'],
-					'thismonth' => $oltimespan,
-					'total' => $oltimespan,
-					'lastupdate' => TIMESTAMP,
-				));
-			}
-			$discuz->session->set('lastolupdate', TIMESTAMP);
-		}
-		foreach($discuz->session->var as $k => $v) {
-			if(isset($_G['member'][$k]) && $k != 'lastactivity') {
-				$discuz->session->set($k, $_G['member'][$k]);
-			}
-		}
-
-		foreach($_G['action'] as $k => $v) {
-			$discuz->session->set($k, $v);
-		}
-
-		$discuz->session->update();
-
-		$updated = true;
-
-		if($_G['uid'] && TIMESTAMP - $ulastactivity > 21600) {
-			if($oltimespan && TIMESTAMP - $ulastactivity > 43200) {
-				$total = DB::result_first("SELECT total FROM ".DB::table('common_onlinetime')." WHERE uid='$_G[uid]'");
-				DB::update('common_member_count', array('oltime' => round(intval($total) / 60)), "uid='$_G[uid]'", 1);
-			}
-			dsetcookie('ulastactivity', authcode(TIMESTAMP, 'ENCODE'), 31536000);
-			DB::update('common_member_status', array('lastip' => $_G['clientip'], 'lastactivity' => TIMESTAMP, 'lastvisit' => TIMESTAMP), "uid='$_G[uid]'", 1);
-		}
-	}
-	return $updated;
-}
-
-function dmicrotime() {
-	return array_sum(explode(' ', microtime()));
+function updatesession() {
+	return C::app()->session->updatesession();
 }
 
 function setglobal($key , $value, $group = null) {
 	global $_G;
-	$k = explode('/', $group === null ? $key : $group.'/'.$key);
-	switch (count($k)) {
-		case 1: $_G[$k[0]] = $value; break;
-		case 2: $_G[$k[0]][$k[1]] = $value; break;
-		case 3: $_G[$k[0]][$k[1]][$k[2]] = $value; break;
-		case 4: $_G[$k[0]][$k[1]][$k[2]][$k[3]] = $value; break;
-		case 5: $_G[$k[0]][$k[1]][$k[2]][$k[3]][$k[4]] =$value; break;
+	$key = explode('/', $group === null ? $key : $group.'/'.$key);
+	$p = &$_G;
+	foreach ($key as $k) {
+		if(!isset($p[$k]) || !is_array($p[$k])) {
+			$p[$k] = array();
+		}
+		$p = &$p[$k];
 	}
+	$p = $value;
 	return true;
 }
 
 function getglobal($key, $group = null) {
 	global $_G;
-	$k = explode('/', $group === null ? $key : $group.'/'.$key);
-	switch (count($k)) {
-		case 1: return isset($_G[$k[0]]) ? $_G[$k[0]] : null; break;
-		case 2: return isset($_G[$k[0]][$k[1]]) ? $_G[$k[0]][$k[1]] : null; break;
-		case 3: return isset($_G[$k[0]][$k[1]][$k[2]]) ? $_G[$k[0]][$k[1]][$k[2]] : null; break;
-		case 4: return isset($_G[$k[0]][$k[1]][$k[2]][$k[3]]) ? $_G[$k[0]][$k[1]][$k[2]][$k[3]] : null; break;
-		case 5: return isset($_G[$k[0]][$k[1]][$k[2]][$k[3]][$k[4]]) ? $_G[$k[0]][$k[1]][$k[2]][$k[3]][$k[4]] : null; break;
+	$key = explode('/', $group === null ? $key : $group.'/'.$key);
+	$v = &$_G;
+	foreach ($key as $k) {
+		if (!isset($v[$k])) {
+			return null;
+		}
+		$v = &$v[$k];
 	}
-	return null;
+	return $v;
 }
 
 function getgpc($k, $type='GP') {
@@ -124,10 +67,16 @@ function getgpc($k, $type='GP') {
 
 }
 
-function getuserbyuid($uid) {
+function getuserbyuid($uid, $fetch_archive = 0) {
 	static $users = array();
 	if(empty($users[$uid])) {
-		$users[$uid] = DB::fetch_first("SELECT * FROM ".DB::table('common_member')." WHERE uid='$uid'");
+		$users[$uid] = C::t('common_member'.($fetch_archive === 2 ? '_archive' : ''))->fetch($uid);
+		if($fetch_archive === 1 && empty($users[$uid])) {
+			$users[$uid] = C::t('common_member_archive')->fetch($uid);
+		}
+	}
+	if(!isset($users[$uid]['self']) && $uid == getglobal('uid') && getglobal('uid')) {
+		$users[$uid]['self'] = 1;
 	}
 	return $users[$uid];
 }
@@ -138,7 +87,7 @@ function getuserprofile($field) {
 		return $_G['member'][$field];
 	}
 	static $tablefields = array(
-		'count'		=> array('extcredits1','extcredits2','extcredits3','extcredits4','extcredits5','extcredits6','extcredits7','extcredits8','friends','posts','threads','digestposts','doings','blogs','albums','sharings','attachsize','views','oltime','todayattachs','todayattachsize'),
+		'count'		=> array('extcredits1','extcredits2','extcredits3','extcredits4','extcredits5','extcredits6','extcredits7','extcredits8','friends','posts','threads','digestposts','doings','blogs','albums','sharings','attachsize','views','oltime','todayattachs','todayattachsize', 'follower', 'following', 'newfollower', 'blacklist'),
 		'status'	=> array('regip','lastip','lastvisit','lastactivity','lastpost','lastsendmail','invisible','buyercredit','sellercredit','favtimes','sharetimes','profileprogress'),
 		'field_forum'	=> array('publishfeed','customshow','customstatus','medals','sightml','groupterms','authstr','groups','attentiongroup'),
 		'field_home'	=> array('videophoto','spacename','spacedescription','domain','addsize','addfriend','menunum','theme','spacecss','blockposition','recentnote','spacenote','privacy','feedfriend','acceptemail','magicgift','stickblogs'),
@@ -153,18 +102,17 @@ function getuserprofile($field) {
 		}
 	}
 	if($profiletable) {
-		$data = array();
-		if($_G['uid']) {
-			$data = DB::fetch_first("SELECT ".implode(', ', $tablefields[$profiletable])." FROM ".DB::table('common_member_'.$profiletable)." WHERE uid='$_G[uid]'");
-		}
-		if(!$data) {
+
+		if(is_array($_G['member']) && $_G['member']['uid']) {
+			space_merge($_G['member'], $profiletable);
+		} else {
 			foreach($tablefields[$profiletable] as $k) {
-				$data[$k] = '';
+				$_G['member'][$k] = '';
 			}
 		}
-		$_G['member'] = array_merge(is_array($_G['member']) ? $_G['member'] : array(), $data);
 		return $_G['member'][$field];
 	}
+	return null;
 }
 
 function daddslashes($string, $force = 1) {
@@ -242,20 +190,33 @@ function fsocketopen($hostname, $port = 80, &$errno, &$errstr, $timeout = 15) {
 	return $fp;
 }
 
-function dfsockopen($url, $limit = 0, $post = '', $cookie = '', $bysocket = FALSE, $ip = '', $timeout = 15, $block = TRUE) {
+function dfsockopen($url, $limit = 0, $post = '', $cookie = '', $bysocket = FALSE, $ip = '', $timeout = 15, $block = TRUE, $encodetype  = 'URLENCODE', $allowcurl = TRUE, $position = 0) {
 	require_once libfile('function/filesock');
-	return _dfsockopen($url, $limit, $post, $cookie, $bysocket, $ip, $timeout, $block);
+	return _dfsockopen($url, $limit, $post, $cookie, $bysocket, $ip, $timeout, $block, $encodetype, $allowcurl, $position);
 }
 
-function dhtmlspecialchars($string) {
+function dhtmlspecialchars($string, $flags = null) {
 	if(is_array($string)) {
 		foreach($string as $key => $val) {
-			$string[$key] = dhtmlspecialchars($val);
+			$string[$key] = dhtmlspecialchars($val, $flags);
 		}
 	} else {
-		$string = str_replace(array('&', '"', '<', '>'), array('&amp;', '&quot;', '&lt;', '&gt;'), $string);
-		if(strpos($string, '&amp;#') !== false) {
-			$string = preg_replace('/&amp;((#(\d{3,5}|x[a-fA-F0-9]{4}));)/', '&\\1', $string);
+		if($flags === null) {
+			$string = str_replace(array('&', '"', '<', '>'), array('&amp;', '&quot;', '&lt;', '&gt;'), $string);
+			if(strpos($string, '&amp;#') !== false) {
+				$string = preg_replace('/&amp;((#(\d{3,5}|x[a-fA-F0-9]{4}));)/', '&\\1', $string);
+			}
+		} else {
+			if(PHP_VERSION < '5.4.0') {
+				$string = htmlspecialchars($string, $flags);
+			} else {
+				if(strtolower(CHARSET) == 'utf-8') {
+					$charset = 'UTF-8';
+				} else {
+					$charset = 'ISO-8859-1';
+				}
+				$string = htmlspecialchars($string, $flags, $charset);
+			}
 		}
 	}
 	return $string;
@@ -271,13 +232,13 @@ function dheader($string, $replace = true, $http_response_code = 0) {
 	$islocation = substr(strtolower(trim($string)), 0, 8) == 'location';
 	if(defined('IN_MOBILE') && strpos($string, 'mobile') === false && $islocation) {
 		if (strpos($string, '?') === false) {
-			$string = $string.'?mobile=yes';
+			$string = $string.'?mobile='.IN_MOBILE;
 		} else {
 			if(strpos($string, '#') === false) {
-				$string = $string.'&mobile=yes';
+				$string = $string.'&mobile='.IN_MOBILE;
 			} else {
 				$str_arr = explode('#', $string);
-				$str_arr[0] = $str_arr[0].'&mobile=yes';
+				$str_arr[0] = $str_arr[0].'&mobile='.IN_MOBILE;
 				$string = implode('#', $str_arr);
 			}
 		}
@@ -350,30 +311,49 @@ function checkrobot($useragent = '') {
 function checkmobile() {
 	global $_G;
 	$mobile = array();
-	static $mobilebrowser_list =array('iphone', 'android', 'phone', 'mobile', 'wap', 'netfront', 'java', 'opera mobi', 'opera mini',
+	static $touchbrowser_list =array('iphone', 'android', 'phone', 'mobile', 'wap', 'netfront', 'java', 'opera mobi', 'opera mini',
 				'ucweb', 'windows ce', 'symbian', 'series', 'webos', 'sony', 'blackberry', 'dopod', 'nokia', 'samsung',
 				'palmsource', 'xda', 'pieplus', 'meizu', 'midp', 'cldc', 'motorola', 'foma', 'docomo', 'up.browser',
 				'up.link', 'blazer', 'helio', 'hosin', 'huawei', 'novarra', 'coolpad', 'webos', 'techfaith', 'palmsource',
 				'alcatel', 'amoi', 'ktouch', 'nexian', 'ericsson', 'philips', 'sagem', 'wellcom', 'bunjalloo', 'maui', 'smartphone',
 				'iemobile', 'spice', 'bird', 'zte-', 'longcos', 'pantech', 'gionee', 'portalmmm', 'jig browser', 'hiptop',
 				'benq', 'haier', '^lct', '320x320', '240x320', '176x220');
+	static $mobilebrowser_list =array('windows phone');
+	static $wmlbrowser_list = array('cect', 'compal', 'ctl', 'lg', 'nec', 'tcl', 'alcatel', 'ericsson', 'bird', 'daxian', 'dbtel', 'eastcom',
+			'pantech', 'dopod', 'philips', 'haier', 'konka', 'kejian', 'lenovo', 'benq', 'mot', 'soutec', 'nokia', 'sagem', 'sgh',
+			'sed', 'capitel', 'panasonic', 'sonyericsson', 'sharp', 'amoi', 'panda', 'zte');
+
+	$pad_list = array('pad', 'gt-p1000');
+
 	$useragent = strtolower($_SERVER['HTTP_USER_AGENT']);
-	if(($v = dstrpos($useragent, $mobilebrowser_list, true))) {
+
+	if(dstrpos($useragent, $pad_list)) {
+		return false;
+	}
+	if(($v = dstrpos($useragent, $mobilebrowser_list, true))){
 		$_G['mobile'] = $v;
-		return true;
+		return '1';
+	}
+	if(($v = dstrpos($useragent, $touchbrowser_list, true))){
+		$_G['mobile'] = $v;
+		return '2';
+	}
+	if(($v = dstrpos($useragent, $wmlbrowser_list))) {
+		$_G['mobile'] = $v;
+		return '3'; //wml版
 	}
 	$brower = array('mozilla', 'chrome', 'safari', 'opera', 'm3gate', 'winwap', 'openwave', 'myop');
 	if(dstrpos($useragent, $brower)) return false;
 
 	$_G['mobile'] = 'unknown';
-	if($_GET['mobile'] === 'yes') {
+	if(isset($_G['mobiletpl'][$_GET['mobile']])) {
 		return true;
 	} else {
 		return false;
 	}
 }
 
-function dstrpos($string, &$arr, $returnvalue = false) {
+function dstrpos($string, $arr, $returnvalue = false) {
 	if(empty($string)) return false;
 	foreach((array)$arr as $v) {
 		if(strpos($string, $v) !== false) {
@@ -385,7 +365,7 @@ function dstrpos($string, &$arr, $returnvalue = false) {
 }
 
 function isemail($email) {
-	return strlen($email) > 6 && preg_match("/^([A-Za-z0-9\-_.+]+)@([A-Za-z0-9\-]+[.][A-Za-z0-9\-.]+)$/", $email);
+	return strlen($email) > 6 && strlen($email) <= 32 && preg_match("/^([A-Za-z0-9\-_.+]+)@([A-Za-z0-9\-]+[.][A-Za-z0-9\-.]+)$/", $email);
 }
 
 function quescrypt($questionid, $answer) {
@@ -395,7 +375,12 @@ function quescrypt($questionid, $answer) {
 function random($length, $numeric = 0) {
 	$seed = base_convert(md5(microtime().$_SERVER['DOCUMENT_ROOT']), 16, $numeric ? 10 : 35);
 	$seed = $numeric ? (str_replace('0', '', $seed).'012340567890') : ($seed.'zZ'.strtoupper($seed));
-	$hash = '';
+	if($numeric) {
+		$hash = '';
+	} else {
+		$hash = chr(rand(1, 26) + rand(0, 1) * 32 + 64);
+		$length--;
+	}
 	$max = strlen($seed) - 1;
 	for($i = 0; $i < $length; $i++) {
 		$hash .= $seed{mt_rand(0, $max)};
@@ -409,6 +394,14 @@ function strexists($string, $find) {
 
 function avatar($uid, $size = 'middle', $returnsrc = FALSE, $real = FALSE, $static = FALSE, $ucenterurl = '') {
 	global $_G;
+	if($_G['setting']['plugins']['func'][HOOKTYPE]['avatar']) {
+		$_G['hookavatar'] = '';
+		$param = func_get_args();
+		hookscript('avatar', 'global', 'funcs', array('param' => $param), 'avatar');
+		if($_G['hookavatar']) {
+			return $_G['hookavatar'];
+		}
+	}
 	static $staticavatar;
 	if($staticavatar === null) {
 		$staticavatar = $_G['setting']['avatarmethod'];
@@ -431,10 +424,15 @@ function avatar($uid, $size = 'middle', $returnsrc = FALSE, $real = FALSE, $stat
 
 function lang($file, $langvar = null, $vars = array(), $default = null) {
 	global $_G;
+	$fileinput = $file;
 	list($path, $file) = explode('/', $file);
 	if(!$file) {
 		$file = $path;
 		$path = '';
+	}
+	if(strpos($file, ':') !== false) {
+		$path = 'plugin';
+		list($file) = explode(':', $file);
 	}
 
 	if($path != 'plugin') {
@@ -446,6 +444,15 @@ function lang($file, $langvar = null, $vars = array(), $default = null) {
 		if(defined('IN_MOBILE') && !defined('TPL_DEFAULT')) {
 			include DISCUZ_ROOT.'./source/language/mobile/lang_template.php';
 			$_G['lang'][$key] = array_merge($_G['lang'][$key], $lang);
+		}
+		if($file != 'error' && !isset($_G['cache']['pluginlanguage_system'])) {
+			loadcache('pluginlanguage_system');
+		}
+		if(!isset($_G['hooklang'][$fileinput])) {
+			if(isset($_G['cache']['pluginlanguage_system'][$fileinput])) {
+				$_G['lang'][$key] = array_merge($_G['lang'][$key], $_G['cache']['pluginlanguage_system'][$fileinput]);
+			}
+			$_G['hooklang'][$fileinput] = true;
 		}
 		$returnvalue = &$_G['lang'];
 	} else {
@@ -496,8 +503,9 @@ function checktplrefresh($maintpl, $subtpl, $timecompare, $templateid, $cachefil
 			if($targettplname === null) {
 				$targettplname = getglobal('style/tplfile');
 				if(!empty($targettplname)) {
+					include_once libfile('function/block');
 					$targettplname = strtr($targettplname, ':', '_');
-					update_template_block($targettplname, $template->blocks);
+					update_template_block($targettplname, getglobal('style/tpldirectory'), $template->blocks);
 				}
 				$targettplname = true;
 			}
@@ -512,8 +520,7 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 
 	static $_init_style = false;
 	if($_init_style === false) {
-		$discuz = & discuz_core::instance();
-		$discuz->_init_style();
+		C::app()->_init_style();
 		$_init_style = true;
 	}
 	$oldfile = $file;
@@ -521,12 +528,14 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 		$clonefile = '';
 		list($templateid, $file, $clonefile) = explode(':', $file);
 		$oldfile = $file;
-		$file = empty($clonefile) || STYLEID != $_G['cache']['style_default']['styleid'] ? $file : $file.'_'.$clonefile;
-		if($templateid == 'diy' && STYLEID == $_G['cache']['style_default']['styleid']) {
+		$file = empty($clonefile) ? $file : $file.'_'.$clonefile;
+		if($templateid == 'diy') {
+			$indiy = false;
+			$_G['style']['tpldirectory'] = $tpldir ? $tpldir : (defined('TPLDIR') ? TPLDIR : '');
 			$_G['style']['prefile'] = '';
-			$diypath = DISCUZ_ROOT.'./data/diy/'; //DIY模板文件目录
+			$diypath = DISCUZ_ROOT.'./data/diy/'.$_G['style']['tpldirectory'].'/'; //DIY模板文件目录
 			$preend = '_diy_preview';
-			$_G['gp_preview'] = !empty($_G['gp_preview']) ? $_G['gp_preview'] : '';
+			$_GET['preview'] = !empty($_GET['preview']) ? $_GET['preview'] : '';
 			$curtplname = $oldfile;
 			$basescript = $_G['mod'] == 'viewthread' && !empty($_G['thread']) ? 'forum' : $_G['basescript'];
 			if(isset($_G['cache']['diytemplatename'.$basescript])) {
@@ -539,23 +548,24 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 			}
 			$tplsavemod = 0;
 			if(isset($diytemplatename[$file]) && file_exists($diypath.$file.'.htm') && ($tplsavemod = 1) || empty($_G['forum']['styleid']) && ($file = $primaltpl ? $primaltpl : $oldfile) && isset($diytemplatename[$file]) && file_exists($diypath.$file.'.htm')) {
-				$tpldir = 'data/diy';
+				$tpldir = 'data/diy/'.$_G['style']['tpldirectory'].'/';
 				!$gettplfile && $_G['style']['tplsavemod'] = $tplsavemod;
 				$curtplname = $file;
-				if($_G['gp_diy'] == 'yes' || $_G['gp_preview'] == 'yes') { //DIY模式或预览模式下做以下判断
+				if(isset($_GET['diy']) && $_GET['diy'] == 'yes' || isset($_GET['diy']) && $_GET['preview'] == 'yes') { //DIY模式或预览模式下做以下判断
 					$flag = file_exists($diypath.$file.$preend.'.htm');
-					if($_G['gp_preview'] == 'yes') {
+					if($_GET['preview'] == 'yes') {
 						$file .= $flag ? $preend : '';
 					} else {
 						$_G['style']['prefile'] = $flag ? 1 : '';
 					}
 				}
+				$indiy = true;
 			} else {
 				$file = $primaltpl ? $primaltpl : $oldfile;
 			}
 			$tplrefresh = $_G['config']['output']['tplrefresh'];
-			if($tpldir == 'data/diy' && ($tplrefresh ==1 || ($tplrefresh > 1 && !($_G['timestamp'] % $tplrefresh))) && filemtime($diypath.$file.'.htm') < filemtime(DISCUZ_ROOT.TPLDIR.'/'.($primaltpl ? $primaltpl : $oldfile).'.htm')) {
-				if (!updatediytemplate($file)) {
+			if($indiy && ($tplrefresh ==1 || ($tplrefresh > 1 && !($_G['timestamp'] % $tplrefresh))) && filemtime($diypath.$file.'.htm') < filemtime(DISCUZ_ROOT.$_G['style']['tpldirectory'].'/'.($primaltpl ? $primaltpl : $oldfile).'.htm')) {
+				if (!updatediytemplate($file, $_G['style']['tpldirectory'])) {
 					unlink($diypath.$file.'.htm');
 					$tpldir = '';
 				}
@@ -565,7 +575,7 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 				$_G['style']['tplfile'] = empty($clonefile) ? $curtplname : $oldfile.':'.$clonefile;
 			}
 
-			$_G['style']['prefile'] = !empty($_G['gp_preview']) && $_G['gp_preview'] == 'yes' ? '' : $_G['style']['prefile'];
+			$_G['style']['prefile'] = !empty($_GET['preview']) && $_GET['preview'] == 'yes' ? '' : $_G['style']['prefile'];
 
 		} else {
 			$tpldir = './source/plugin/'.$templateid.'/template';
@@ -577,8 +587,11 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 	$templateid = $templateid ? $templateid : (defined('TEMPLATEID') ? TEMPLATEID : '');
 	$filebak = $file;
 
-	if(defined('IN_MOBILE') && !defined('TPL_DEFAULT') && strpos($file, 'mobile/') === false || $_G['forcemobilemessage']) {
-		$file = 'mobile/'.$oldfile;
+	if(defined('IN_MOBILE') && !defined('TPL_DEFAULT') && strpos($file, $_G['mobiletpl'][IN_MOBILE].'/') === false || (isset($_G['forcemobilemessage']) && $_G['forcemobilemessage'])) {
+		if(IN_MOBILE == 2) {
+			$oldfile .= !empty($_G['inajax']) && ($oldfile == 'common/header' || $oldfile == 'common/footer') ? '_ajax' : '';
+		}
+		$file = $_G['mobiletpl'][IN_MOBILE].'/'.$oldfile;
 	}
 
 	if(!$tpldir) {
@@ -590,21 +603,20 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 
 	if(defined('IN_MOBILE') && !defined('TPL_DEFAULT')) {
 		if(strpos($tpldir, 'plugin')) {
-			if(!file_exists(DISCUZ_ROOT.$tpldir.'/'.$file.'.htm')) {
-				require_once libfile('class/error');
+			if(!file_exists(DISCUZ_ROOT.$tpldir.'/'.$file.'.htm') && !file_exists(DISCUZ_ROOT.$tpldir.'/'.$file.'.php')) {
 				discuz_error::template_error('template_notfound', $tpldir.'/'.$file.'.htm');
 			} else {
 				$mobiletplfile = $tpldir.'/'.$file.'.htm';
 			}
 		}
 		!$mobiletplfile && $mobiletplfile = $file.'.htm';
-		if(strpos($tpldir, 'plugin') && file_exists(DISCUZ_ROOT.$mobiletplfile)) {
+		if(strpos($tpldir, 'plugin') && (file_exists(DISCUZ_ROOT.$mobiletplfile) || file_exists(substr(DISCUZ_ROOT.$mobiletplfile, 0, -4).'.php'))) {
 			$tplfile = $mobiletplfile;
-		} elseif(!file_exists(DISCUZ_ROOT.TPLDIR.'/'.$mobiletplfile)) {
+		} elseif(!file_exists(DISCUZ_ROOT.TPLDIR.'/'.$mobiletplfile) && !file_exists(substr(DISCUZ_ROOT.TPLDIR.'/'.$mobiletplfile, 0, -4).'.php')) {
 			$mobiletplfile = './template/default/'.$mobiletplfile;
 			if(!file_exists(DISCUZ_ROOT.$mobiletplfile) && !$_G['forcemobilemessage']) {
-				$tplfile = str_replace('mobile/', '', $tplfile);
-				$file = str_replace('mobile/', '', $file);
+				$tplfile = str_replace($_G['mobiletpl'][IN_MOBILE].'/', '', $tplfile);
+				$file = str_replace($_G['mobiletpl'][IN_MOBILE].'/', '', $file);
 				define('TPL_DEFAULT', true);
 			} else {
 				$tplfile = $mobiletplfile;
@@ -615,8 +627,8 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 	}
 
 	$cachefile = './data/template/'.(defined('STYLEID') ? STYLEID.'_' : '_').$templateid.'_'.str_replace('/', '_', $file).'.tpl.php';
-
-	if($templateid != 1 && !file_exists(DISCUZ_ROOT.$tplfile) && !file_exists(DISCUZ_ROOT.($tplfile = $tpldir.$filebak.'.htm'))) {
+	if($templateid != 1 && !file_exists(DISCUZ_ROOT.$tplfile) && !file_exists(substr(DISCUZ_ROOT.$tplfile, 0, -4).'.php')
+			&& !file_exists(DISCUZ_ROOT.($tplfile = $tpldir.$filebak.'.htm'))) {
 		$tplfile = './template/default/'.$filebak.'.htm';
 	}
 
@@ -628,12 +640,11 @@ function template($file, $templateid = 0, $tpldir = '', $gettplfile = 0, $primal
 }
 
 function dsign($str, $length = 16){
-	return substr(md5(getglobal('uid').$str.getglobal('authkey')), 0, ($length ? max(8, $length) : 16));
+	return substr(md5($str.getglobal('security/authkey')), 0, ($length ? max(8, $length) : 16));
 }
 
 function modauthkey($id) {
-	global $_G;
-	return md5($_G['username'].$_G['uid'].$_G['authkey'].substr(TIMESTAMP, 0, -7).$id);
+	return md5(getglobal('username').getglobal('uid').getglobal('authkey').substr(TIMESTAMP, 0, -7).$id);
 }
 
 function getcurrentnav() {
@@ -644,15 +655,19 @@ function getcurrentnav() {
 	$mnid = '';
 	$_G['basefilename'] = $_G['basefilename'] == $_G['basescript'] ? $_G['basefilename'] : $_G['basescript'].'.php';
 	if(isset($_G['setting']['navmns'][$_G['basefilename']])) {
+		if($_G['basefilename'] == 'home.php' && $_GET['mod'] == 'space' && (empty($_GET['do']) || in_array($_GET['do'], array('follow', 'view')))) {
+			$_GET['mod'] = 'follow';
+		}
 		foreach($_G['setting']['navmns'][$_G['basefilename']] as $navmn) {
-			if($navmn[0] == array_intersect_assoc($navmn[0], $_GET)) {
+			if($navmn[0] == array_intersect_assoc($navmn[0], $_GET) || ($navmn[0]['mod'] == 'space' && $_GET['mod'] == 'spacecp' && ($navmn[0]['do'] == $_GET['ac'] || $navmn[0]['do'] == 'album' && $_GET['ac'] == 'upload'))) {
 				$mnid = $navmn[1];
 			}
 		}
+
 	}
 	if(!$mnid && isset($_G['setting']['navdms'])) {
 		foreach($_G['setting']['navdms'] as $navdm => $navid) {
-			if(strpos(strtolower($_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI']), $navdm) !== false) {
+			if(strpos(strtolower($_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI']), $navdm) !== false && strpos(strtolower($_SERVER['HTTP_HOST']), $navdm) === false) {
 				$mnid = $navid;
 				break;
 			}
@@ -682,7 +697,7 @@ function loadcache($cachenames, $force = false) {
 	}
 
 	if(!empty($caches)) {
-		$cachedata = cachedata($caches);
+		$cachedata = C::t('common_syscache')->fetch_all($caches);
 		foreach($cachedata as $cname => $data) {
 			if($cname == 'setting') {
 				$_G['setting'] = $data;
@@ -698,69 +713,6 @@ function loadcache($cachenames, $force = false) {
 		}
 	}
 	return true;
-}
-
-function cachedata($cachenames) {
-	global $_G;
-	static $isfilecache, $allowmem;
-
-	if(!isset($isfilecache)) {
-		$isfilecache = getglobal('config/cache/type') == 'file';
-		$allowmem = memory('check');
-	}
-
-	$data = array();
-	$cachenames = is_array($cachenames) ? $cachenames : array($cachenames);
-	if($allowmem) {
-		$newarray = array();
-		foreach ($cachenames as $name) {
-			$data[$name] = memory('get', $name);
-			if($data[$name] === null) {
-				$data[$name] = null;
-				$newarray[] = $name;
-			}
-		}
-		if(empty($newarray)) {
-			return $data;
-		} else {
-			$cachenames = $newarray;
-		}
-	}
-
-	if($isfilecache) {
-		$lostcaches = array();
-		foreach($cachenames as $cachename) {
-			if(!@include_once(DISCUZ_ROOT.'./data/cache/cache_'.$cachename.'.php')) {
-				$lostcaches[] = $cachename;
-			}
-		}
-		if(!$lostcaches) {
-			return $data;
-		}
-		$cachenames = $lostcaches;
-		unset($lostcaches);
-	}
-	$query = DB::query("SELECT * FROM ".DB::table('common_syscache')." WHERE cname IN ('".implode("','", $cachenames)."')");
-	while($syscache = DB::fetch($query)) {
-		$data[$syscache['cname']] = $syscache['ctype'] ? unserialize($syscache['data']) : $syscache['data'];
-		$allowmem && (memory('set', $syscache['cname'], $data[$syscache['cname']]));
-		if($isfilecache) {
-			$cachedata = '$data[\''.$syscache['cname'].'\'] = '.var_export($data[$syscache['cname']], true).";\n\n";
-			if($fp = @fopen(DISCUZ_ROOT.'./data/cache/cache_'.$syscache['cname'].'.php', 'wb')) {
-				fwrite($fp, "<?php\n//Discuz! cache file, DO NOT modify me!\n//Identify: ".md5($syscache['cname'].$cachedata.$_G['config']['security']['authkey'])."\n\n$cachedata?>");
-				fclose($fp);
-			}
-		}
-	}
-
-	foreach($cachenames as $name) {
-		if($data[$name] === null) {
-			$data[$name] = null;
-			$allowmem && (memory('set', $name, array()));
-		}
-	}
-
-	return $data;
 }
 
 function dgmdate($timestamp, $format = 'dt', $timeoffset = '9999', $uformat = '') {
@@ -779,33 +731,40 @@ function dgmdate($timestamp, $format = 'dt', $timeoffset = '9999', $uformat = ''
 	$format = empty($format) || $format == 'dt' ? $dtformat : ($format == 'd' ? $dformat : ($format == 't' ? $tformat : $format));
 	if($format == 'u') {
 		$todaytimestamp = TIMESTAMP - (TIMESTAMP + $timeoffset * 3600) % 86400 + $timeoffset * 3600;
-		$s = gmdate(!$uformat ? str_replace(":i", ":i:s", $dtformat) : $uformat, $timestamp);
+		$s = gmdate(!$uformat ? $dtformat : $uformat, $timestamp);
 		$time = TIMESTAMP + $timeoffset * 3600 - $timestamp;
 		if($timestamp >= $todaytimestamp) {
 			if($time > 3600) {
-				return '<span title="'.$s.'">'.intval($time / 3600).'&nbsp;'.$lang['hour'].$lang['before'].'</span>';
+				$return = intval($time / 3600).'&nbsp;'.$lang['hour'].$lang['before'];
 			} elseif($time > 1800) {
-				return '<span title="'.$s.'">'.$lang['half'].$lang['hour'].$lang['before'].'</span>';
+				$return = $lang['half'].$lang['hour'].$lang['before'];
 			} elseif($time > 60) {
-				return '<span title="'.$s.'">'.intval($time / 60).'&nbsp;'.$lang['min'].$lang['before'].'</span>';
+				$return = intval($time / 60).'&nbsp;'.$lang['min'].$lang['before'];
 			} elseif($time > 0) {
-				return '<span title="'.$s.'">'.$time.'&nbsp;'.$lang['sec'].$lang['before'].'</span>';
+				$return = $time.'&nbsp;'.$lang['sec'].$lang['before'];
 			} elseif($time == 0) {
-				return '<span title="'.$s.'">'.$lang['now'].'</span>';
+				$return = $lang['now'];
 			} else {
-				return $s;
+				$return = $s;
+			}
+			if($time >=0 && !defined('IN_MOBILE')) {
+				$return = '<span title="'.$s.'">'.$return.'</span>';
 			}
 		} elseif(($days = intval(($todaytimestamp - $timestamp) / 86400)) >= 0 && $days < 7) {
 			if($days == 0) {
-				return '<span title="'.$s.'">'.$lang['yday'].'&nbsp;'.gmdate($tformat, $timestamp).'</span>';
+				$return = $lang['yday'].'&nbsp;'.gmdate($tformat, $timestamp);
 			} elseif($days == 1) {
-				return '<span title="'.$s.'">'.$lang['byday'].'&nbsp;'.gmdate($tformat, $timestamp).'</span>';
+				$return = $lang['byday'].'&nbsp;'.gmdate($tformat, $timestamp);
 			} else {
-				return '<span title="'.$s.'">'.($days + 1).'&nbsp;'.$lang['day'].$lang['before'].'</span>';
+				$return = ($days + 1).'&nbsp;'.$lang['day'].$lang['before'];
+			}
+			if(!defined('IN_MOBILE')) {
+				$return = '<span title="'.$s.'">'.$return.'</span>';
 			}
 		} else {
-			return $s;
+			$return = $s;
 		}
+		return $return;
 	} else {
 		return gmdate($format, $timestamp);
 	}
@@ -819,66 +778,21 @@ function dmktime($date) {
 	return 0;
 }
 
+function dnumber($number) {
+	return abs($number) > 10000 ? '<span title="'.$number.'">'.intval($number / 10000).lang('core', '10k').'</span>' : $number;
+}
+
+function savecache($cachename, $data) {
+	C::t('common_syscache')->insert($cachename, $data);
+}
+
 function save_syscache($cachename, $data) {
-	static $isfilecache, $allowmem;
-	if(!isset($isfilecache)) {
-		$isfilecache = getglobal('config/cache/type') == 'file';
-		$allowmem = memory('check');
-	}
-
-	if(is_array($data)) {
-		$ctype = 1;
-		$data = addslashes(serialize($data));
-	} else {
-		$ctype = 0;
-	}
-
-	DB::query("REPLACE INTO ".DB::table('common_syscache')." (cname, ctype, dateline, data) VALUES ('$cachename', '$ctype', '".TIMESTAMP."', '$data')");
-
-	$allowmem && memory('rm', $cachename);
-	$isfilecache && @unlink(DISCUZ_ROOT.'./data/cache/cache_'.$cachename.'.php');
+	savecache($cachename, $data);
 }
 
 function block_get($parameter) {
-	global $_G;
-	static $allowmem;
-	if($allowmem === null) {
-		include_once libfile('function/block');
-		$allowmem = getglobal('setting/memory/diyblock/enable') && memory('check');
-	}
-	if(!$allowmem) {
-		block_get_batch($parameter);
-		return true;
-	}
-	$blockids = explode(',', $parameter);
-	$lostbids = array();
-	foreach ($blockids as $bid) {
-		$bid = intval($bid);
-		if($bid) {
-			$_G['block'][$bid] = memory('get', 'blockcache_'.$bid);
-			if($_G['block'][$bid] === null) {
-				$lostbids[] = $bid;
-			} else {
-				$styleid = $_G['block'][$bid]['styleid'];
-				if($styleid && !isset($_G['blockstyle_'.$styleid])) {
-					$_G['blockstyle_'.$styleid] = memory('get', 'blockstylecache_'.$styleid);
-				}
-			}
-		}
-	}
-
-	if($lostbids) {
-		block_get_batch(implode(',', $lostbids));
-		foreach ($lostbids as $bid) {
-			if(isset($_G['block'][$bid])) {
-				memory('set', 'blockcache_'.$bid, $_G['block'][$bid], getglobal('setting/memory/diyblock/ttl'));
-				$styleid = $_G['block'][$bid]['styleid'];
-				if($styleid && $_G['blockstyle_'.$styleid]) {
-					memory('set', 'blockstylecache_'.$styleid, $_G['blockstyle_'.$styleid], getglobal('setting/memory/diyblock/ttl'));
-				}
-			}
-		}
-	}
+	include_once libfile('function/block');
+	block_get_batch($parameter);
 }
 
 function block_display($bid) {
@@ -888,6 +802,7 @@ function block_display($bid) {
 
 function dimplode($array) {
 	if(!empty($array)) {
+		$array = array_map('addslashes', $array);
 		return "'".implode("','", is_array($array) ? $array : array($array))."'";
 	} else {
 		return 0;
@@ -895,13 +810,14 @@ function dimplode($array) {
 }
 
 function libfile($libname, $folder = '') {
-	$libpath = DISCUZ_ROOT.'/source/'.$folder;
+	$libpath = '/source/'.$folder;
 	if(strstr($libname, '/')) {
 		list($pre, $name) = explode('/', $libname);
-		return realpath("{$libpath}/{$pre}/{$pre}_{$name}.php");
+		$path = "{$libpath}/{$pre}/{$pre}_{$name}";
 	} else {
-		return realpath("{$libpath}/{$libname}.php");
+		$path = "{$libpath}/{$libname}";
 	}
+	return preg_match('/^[\w\d\/_]+$/i', $path) ? realpath(DISCUZ_ROOT.$path.'.php') : false;
 }
 
 function dstrlen($str) {
@@ -966,8 +882,13 @@ function cutstr($string, $length, $dot = ' ...') {
 		$strcut = substr($string, 0, $n);
 
 	} else {
+		$_length = $length - 1;
 		for($i = 0; $i < $length; $i++) {
-			$strcut .= ord($string[$i]) > 127 ? $string[$i].$string[++$i] : $string[$i];
+			if(ord($string[$i]) <= 127) {
+				$strcut .= $string[$i];
+			} else if($i < $_length) {
+				$strcut .= $string[$i].$string[++$i];
+			}
 		}
 	}
 
@@ -1060,6 +981,16 @@ function rewriteoutput($type, $returntype, $host) {
 		if($page) {
 			$fextra = '?page='.$page;
 		}
+	} elseif($type == 'plugin') {
+		list(,, $pluginid, $module,, $param, $extra) = func_get_args();
+		$host = '';
+		$r = array(
+			'{pluginid}' => $pluginid,
+			'{module}' => $module,
+		);
+		if($param) {
+			$fextra = '?'.$param;
+		}
 	}
 	$href = str_replace(array_keys($r), $r, $_G['setting']['rewriterule'][$type]).$fextra;
 	if(!$returntype) {
@@ -1070,46 +1001,11 @@ function rewriteoutput($type, $returntype, $host) {
 }
 
 function mobilereplace($file, $replace) {
-	global $_G;
-	if(strpos($replace, 'mobile=') === false) {
-		if(strpos($replace, '?') === false) {
-			$replace = 'href="'.$file.$replace.'?mobile=yes"';
-		} else {
-			$replace = 'href="'.$file.$replace.'&mobile=yes"';
-		}
-		return $replace;
-	} else {
-		return 'href="'.$file.$replace.'"';
-	}
+	return helper_mobile::mobilereplace($file, $replace);
 }
 
 function mobileoutput() {
-	global $_G;
-	if(!defined('TPL_DEFAULT')) {
-		$content = ob_get_contents();
-		ob_end_clean();
-		$content = preg_replace("/href=\"(\w+\.php)(.*?)\"/e", "mobilereplace('\\1', '\\2')", $content);
-
-		ob_start();
-		$content = '<?xml version="1.0" encoding="utf-8"?>'.$content;
-		if('utf-8' != CHARSET) {
-			@header('Content-Type: text/html; charset=utf-8');
-			$content = diconv($content, CHARSET, 'utf-8');
-		}
-		echo $content;
-		exit();
-
-	} elseif (defined('TPL_DEFAULT') && !$_G['cookie']['dismobilemessage'] && $_G['mobile']) {
-		ob_end_clean();
-		ob_start();
-		$_G['forcemobilemessage'] = true;
-		$query_sting_tmp = str_replace(array('&mobile=yes', 'mobile=yes'), array(''), $_SERVER['QUERY_STRING']);
-		$_G['setting']['mobile']['pageurl'] = $_G['siteurl'].substr($_G['PHP_SELF'], 1).($query_sting_tmp ? '?'.$query_sting_tmp.'&mobile=no' : '?mobile=no' );
-		unset($query_sting_tmp);
-		dsetcookie('dismobilemessage', '1', 3600);
-		showmessage('not_in_mobile');
-		exit;
-	}
+	helper_mobile::mobileoutput();
 }
 
 function output() {
@@ -1130,8 +1026,10 @@ function output() {
 	if(defined('IN_MOBILE')) {
 		mobileoutput();
 	}
-	include_once libfile('function/cloud');
-	show();
+	if(!defined('IN_MOBILE') && !defined('IN_ARCHIVER')) {
+		$tipsService = Cloud::loadClass('Service_DiscuzTips');
+		$tipsService->show();
+	}
 	$havedomain = implode('', $_G['setting']['domain']['app']);
 	if($_G['setting']['rewritestatus'] || !empty($havedomain)) {
 		$content = ob_get_contents();
@@ -1143,12 +1041,17 @@ function output() {
 
 		echo $content;
 	}
+
+	if(isset($_G['makehtml'])) {
+		helper_makehtml::make_html();
+	}
+
 	if($_G['setting']['ftp']['connid']) {
 		@ftp_close($_G['setting']['ftp']['connid']);
 	}
 	$_G['setting']['ftp'] = array();
 
-	if(defined('CACHE_FILE') && CACHE_FILE && !defined('CACHE_FORBIDDEN') && !defined('IN_MOBILE')) {
+	if(defined('CACHE_FILE') && CACHE_FILE && !defined('CACHE_FORBIDDEN') && !defined('IN_MOBILE') && !checkmobile()) {
 		if(diskfreespace(DISCUZ_ROOT.'./'.$_G['setting']['cachethreaddir']) > 1000000) {
 			if($fp = @fopen(CACHE_FILE, 'w')) {
 				flock($fp, LOCK_EX);
@@ -1173,7 +1076,7 @@ function output_replace($content) {
 		}
 		$content = str_replace($_G['setting']['output']['str']['search'], $_G['setting']['output']['str']['replace'], $content);
 	}
-	if(!empty($_G['setting']['output']['preg']['search'])) {
+	if(!empty($_G['setting']['output']['preg']['search']) && (empty($_G['setting']['rewriteguest']) || empty($_G['uid']))) {
 		if(empty($_G['setting']['domain']['app']['default'])) {
 			$_G['setting']['output']['preg']['search'] = str_replace('\{CURHOST\}', preg_quote($_G['siteurl'], '/'), $_G['setting']['output']['preg']['search']);
 			$_G['setting']['output']['preg']['replace'] = str_replace('{CURHOST}', $_G['siteurl'], $_G['setting']['output']['preg']['replace']);
@@ -1201,27 +1104,29 @@ function output_ajax() {
 	return $s;
 }
 
-function runhooks() {
+function runhooks($scriptextra = '') {
 	if(!defined('HOOKTYPE')) {
 		define('HOOKTYPE', !defined('IN_MOBILE') ? 'hookscript' : 'hookscriptmobile');
 	}
 	if(defined('CURMODULE')) {
 		global $_G;
-		if($_G['setting']['plugins'][HOOKTYPE.'_common']) {
+		if($_G['setting']['plugins']['func'][HOOKTYPE]['common']) {
 			hookscript('common', 'global', 'funcs', array(), 'common');
 		}
-		hookscript(CURMODULE, $_G['basescript']);
+		hookscript(CURMODULE, $_G['basescript'], 'funcs', array(), '', $scriptextra);
 	}
 }
 
-function hookscript($script, $hscript, $type = 'funcs', $param = array(), $func = '') {
+function hookscript($script, $hscript, $type = 'funcs', $param = array(), $func = '', $scriptextra = '') {
 	global $_G;
 	static $pluginclasses;
 	if($hscript == 'home') {
-		if($script != 'spacecp') {
-			$script = 'space_'.(!empty($_G['gp_do']) ? $_G['gp_do'] : (!empty($_GET['do']) ? $_GET['do'] : ''));
-		} else {
-			$script .= !empty($_G['gp_ac']) ? '_'.$_G['gp_ac'] : (!empty($_GET['ac']) ? '_'.$_GET['ac'] : '');
+		if($script == 'space') {
+			$scriptextra = !$scriptextra ? $_GET['do'] : $scriptextra;
+			$script = 'space'.(!empty($scriptextra) ? '_'.$scriptextra : '');
+		} elseif($script == 'spacecp') {
+			$scriptextra = !$scriptextra ? $_GET['ac'] : $scriptextra;
+			$script .= !empty($scriptextra) ? '_'.$scriptextra : '';
 		}
 	}
 	if(!isset($_G['setting'][HOOKTYPE][$hscript][$script][$type])) {
@@ -1231,6 +1136,9 @@ function hookscript($script, $hscript, $type = 'funcs', $param = array(), $func 
 		loadcache('plugin');
 	}
 	foreach((array)$_G['setting'][HOOKTYPE][$hscript][$script]['module'] as $identifier => $include) {
+		if($_G['pluginrunlist'] && !in_array($identifier, $_G['pluginrunlist'])) {
+			continue;
+		}
 		$hooksadminid[$identifier] = !$_G['setting'][HOOKTYPE][$hscript][$script]['adminid'][$identifier] || ($_G['setting'][HOOKTYPE][$hscript][$script]['adminid'][$identifier] && $_G['adminid'] > 0 && $_G['setting']['hookscript'][$hscript][$script]['adminid'][$identifier] >= $_G['adminid']);
 		if($hooksadminid[$identifier]) {
 			@include_once DISCUZ_ROOT.'./source/plugin/'.$include.'.class.php';
@@ -1243,7 +1151,7 @@ function hookscript($script, $hscript, $type = 'funcs', $param = array(), $func 
 			foreach($hookfuncs as $hookfunc) {
 				if($hooksadminid[$hookfunc[0]]) {
 					$classkey = (HOOKTYPE != 'hookscriptmobile' ? '' : 'mobile').'plugin_'.($hookfunc[0].($hscript != 'global' ? '_'.$hscript : ''));
-					if(!class_exists($classkey)) {
+					if(!class_exists($classkey, false)) {
 						continue;
 					}
 					if(!isset($pluginclasses[$classkey])) {
@@ -1254,10 +1162,18 @@ function hookscript($script, $hscript, $type = 'funcs', $param = array(), $func 
 					}
 					$return = $pluginclasses[$classkey]->$hookfunc[1]($param);
 
+					if(substr($hookkey, -7) == '_extend' && !empty($_G['setting']['pluginhooks'][$hookkey])) {
+						continue;
+					}
+
 					if(is_array($return)) {
 						if(!isset($_G['setting']['pluginhooks'][$hookkey]) || is_array($_G['setting']['pluginhooks'][$hookkey])) {
 							foreach($return as $k => $v) {
 								$_G['setting']['pluginhooks'][$hookkey][$k] .= $v;
+							}
+						} else {
+							foreach($return as $k => $v) {
+								$_G['setting']['pluginhooks'][$hookkey][$k] = $v;
 							}
 						}
 					} else {
@@ -1281,13 +1197,6 @@ function hookscriptoutput($tplfile) {
 	if(!empty($_G['hookscriptoutput'])) {
 		return;
 	}
-	if(!empty($_G['gp_mobiledata'])) {
-		require_once libfile('class/mobiledata');
-		$mobiledata = new mobiledata();
-		if($mobiledata->validator()) {
-			$mobiledata->outputvariables();
-		}
-	}
 	hookscript('global', 'global');
 	if(defined('CURMODULE')) {
 		$param = array('template' => $tplfile, 'message' => $_G['hookscriptmessage'], 'values' => $_G['hookscriptvalues']);
@@ -1298,6 +1207,7 @@ function hookscriptoutput($tplfile) {
 
 function pluginmodule($pluginid, $type) {
 	global $_G;
+	$pluginid = $pluginid ? preg_replace("/[^A-Za-z0-9_:]/", '', $pluginid) : '';
 	if(!isset($_G['cache']['plugin'])) {
 		loadcache('plugin');
 	}
@@ -1319,8 +1229,7 @@ function pluginmodule($pluginid, $type) {
 }
 function updatecreditbyaction($action, $uid = 0, $extrasql = array(), $needle = '', $coef = 1, $update = 1, $fid = 0) {
 
-	include_once libfile('class/credit');
-	$credit = & credit::instance();
+	$credit = credit::instance();
 	if($extrasql) {
 		$credit->extrasql = $extrasql;
 	}
@@ -1334,7 +1243,6 @@ function checklowerlimit($action, $uid = 0, $coef = 1, $fid = 0, $returnonly = 0
 
 function batchupdatecredit($action, $uids = 0, $extrasql = array(), $coef = 1, $fid = 0) {
 
-	include_once libfile('class/credit');
 	$credit = & credit::instance();
 	if($extrasql) {
 		$credit->extrasql = $extrasql;
@@ -1343,16 +1251,15 @@ function batchupdatecredit($action, $uids = 0, $extrasql = array(), $coef = 1, $
 }
 
 
-function updatemembercount($uids, $dataarr = array(), $checkgroup = true, $operation = '', $relatedid = 0, $ruletxt = '') {
+function updatemembercount($uids, $dataarr = array(), $checkgroup = true, $operation = '', $relatedid = 0, $ruletxt = '', $customtitle = '', $custommemo = '') {
 	if(!empty($uids) && (is_array($dataarr) && $dataarr)) {
 		require_once libfile('function/credit');
-		return _updatemembercount($uids, $dataarr, $checkgroup, $operation, $relatedid, $ruletxt);
+		return _updatemembercount($uids, $dataarr, $checkgroup, $operation, $relatedid, $ruletxt, $customtitle, $custommemo);
 	}
 	return true;
 }
 
 function checkusergroup($uid = 0) {
-	require_once libfile('class/credit');
 	$credit = & credit::instance();
 	$credit->checkusergroup($uid);
 }
@@ -1385,14 +1292,11 @@ function checkformulacredits($formula) {
 
 function debug($var = null, $vardump = false) {
 	echo '<pre>';
-	if($var === null) {
-		print_r($GLOBALS);
+	$vardump = empty($var) ? true : $vardump;
+	if($vardump) {
+		var_dump($var);
 	} else {
-		if($vardump) {
-			var_dump($var);
-		} else {
-			print_r($var);
-		}
+		print_r($var);
 	}
 	exit();
 }
@@ -1402,9 +1306,9 @@ function debuginfo() {
 	if(getglobal('setting/debug')) {
 		$db = & DB::object();
 		$_G['debuginfo'] = array(
-		    'time' => number_format((dmicrotime() - $_G['starttime']), 6),
+		    'time' => number_format((microtime(true) - $_G['starttime']), 6),
 		    'queries' => $db->querynum,
-		    'memory' => ucwords($_G['memory'])
+		    'memory' => ucwords(C::memory()->type)
 		    );
 		if($db->slaveid) {
 			$_G['debuginfo']['queries'] = 'Total '.$db->querynum.', Slave '.$db->slavequery;
@@ -1418,57 +1322,32 @@ function debuginfo() {
 function getfocus_rand($module) {
 	global $_G;
 
-	if(empty($_G['setting']['focus']) || !array_key_exists($module, $_G['setting']['focus'])) {
-		return null;
-	}
-	do {
-		$focusid = $_G['setting']['focus'][$module][array_rand($_G['setting']['focus'][$module])];
-		if(!empty($_G['cookie']['nofocus_'.$focusid])) {
-			unset($_G['setting']['focus'][$module][$focusid]);
-			$continue = 1;
-		} else {
-			$continue = 0;
-		}
-	} while(!empty($_G['setting']['focus'][$module]) && $continue);
-	if(!$_G['setting']['focus'][$module]) {
+	if(empty($_G['setting']['focus']) || !array_key_exists($module, $_G['setting']['focus']) || !empty($_G['cookie']['nofocus_'.$module]) || !$_G['setting']['focus'][$module]) {
 		return null;
 	}
 	loadcache('focus');
 	if(empty($_G['cache']['focus']['data']) || !is_array($_G['cache']['focus']['data'])) {
 		return null;
 	}
+	$focusid = $_G['setting']['focus'][$module][array_rand($_G['setting']['focus'][$module])];
 	return $focusid;
 }
 
 function check_seccode($value, $idhash) {
-	global $_G;
-	if(!$_G['setting']['seccodestatus']) {
-		return true;
-	}
-	if(!isset($_G['cookie']['seccode'.$idhash])) {
-		return false;
-	}
-	list($checkvalue, $checktime, $checkidhash, $checkformhash) = explode("\t", authcode($_G['cookie']['seccode'.$idhash], 'DECODE', $_G['config']['security']['authkey']));
-	return $checkvalue == strtoupper($value) && TIMESTAMP - 180 > $checktime && $checkidhash == $idhash && FORMHASH == $checkformhash;
+	return helper_form::check_seccode($value, $idhash);
 }
 
 function check_secqaa($value, $idhash) {
-	global $_G;
-	if(!$_G['setting']['secqaa']) {
-		return true;
-	}
-	if(!isset($_G['cookie']['secqaa'.$idhash])) {
-		return false;
-	}
-	loadcache('secqaa');
-	list($checkvalue, $checktime, $checkidhash, $checkformhash) = explode("\t", authcode($_G['cookie']['secqaa'.$idhash], 'DECODE', $_G['config']['security']['authkey']));
-	return $checkvalue == md5($value) && TIMESTAMP - 180 > $checktime && $checkidhash == $idhash && FORMHASH == $checkformhash;
+	return helper_form::check_secqaa($value, $idhash);
 }
 
 function adshow($parameter) {
 	global $_G;
-	if($_G['inajax']) {
+	if($_G['inajax'] || $_G['group']['closead']) {
 		return;
+	}
+	if(isset($_G['config']['plugindeveloper']) && $_G['config']['plugindeveloper'] == 2) {
+		return '<hook>[ad '.$parameter.']</hook>';
 	}
 	$params = explode('/', $parameter);
 	$customid = 0;
@@ -1510,7 +1389,9 @@ function adshow($parameter) {
 	$adfunc = 'ad_'.$params[0];
 	$_G['setting']['pluginhooks'][$adfunc] = null;
 	hookscript('ad', 'global', 'funcs', array('params' => $params, 'content' => $adcontent), $adfunc);
-	hookscript('ad', $_G['basescript'], 'funcs', array('params' => $params, 'content' => $adcontent), $adfunc);
+	if(!$_G['setting']['hookscript']['global']['ad']['funcs'][$adfunc]) {
+		hookscript('ad', $_G['basescript'], 'funcs', array('params' => $params, 'content' => $adcontent), $adfunc);
+	}
 	return $_G['setting']['pluginhooks'][$adfunc] === null ? $adcontent : $_G['setting']['pluginhooks'][$adfunc];
 }
 
@@ -1523,217 +1404,50 @@ function submitcheck($var, $allowget = 0, $seccodecheck = 0, $secqaacheck = 0) {
 	if(!getgpc($var)) {
 		return FALSE;
 	} else {
-		global $_G;
-		if(!empty($_G['gp_mobiledata'])) {
-			require_once libfile('class/mobiledata');
-			$mobiledata = new mobiledata();
-			if($mobiledata->validator()) {
-				return TRUE;
-			}
-		}
-		if($allowget || ($_SERVER['REQUEST_METHOD'] == 'POST' && !empty($_G['gp_formhash']) && $_G['gp_formhash'] == formhash() && empty($_SERVER['HTTP_X_FLASH_VERSION']) && (empty($_SERVER['HTTP_REFERER']) ||
-		preg_replace("/https?:\/\/([^\:\/]+).*/i", "\\1", $_SERVER['HTTP_REFERER']) == preg_replace("/([^\:]+).*/", "\\1", $_SERVER['HTTP_HOST'])))) {
-			if(checkperm('seccode')) {
-				if($secqaacheck && !check_secqaa($_G['gp_secanswer'], $_G['gp_sechash'])) {
-					showmessage('submit_secqaa_invalid');
-				}
-				if($seccodecheck && !check_seccode($_G['gp_seccodeverify'], $_G['gp_sechash'])) {
-					showmessage('submit_seccode_invalid');
-				}
-			}
-			return TRUE;
-		} else {
-			showmessage('submit_invalid');
-		}
+		return helper_form::submitcheck($var, $allowget, $seccodecheck, $secqaacheck);
 	}
 }
 
-function multi($num, $perpage, $curpage, $mpurl, $maxpages = 0, $page = 10, $autogoto = FALSE, $simple = FALSE) {
-	global $_G;
-	$ajaxtarget = !empty($_G['gp_ajaxtarget']) ? " ajaxtarget=\"".htmlspecialchars($_G['gp_ajaxtarget'])."\" " : '';
-
-	$a_name = '';
-	if(strpos($mpurl, '#') !== FALSE) {
-		$a_strs = explode('#', $mpurl);
-		$mpurl = $a_strs[0];
-		$a_name = '#'.$a_strs[1];
-	}
-
-	if(defined('IN_ADMINCP')) {
-		$shownum = $showkbd = TRUE;
-		$lang['prev'] = '&lsaquo;&lsaquo;';
-		$lang['next'] = '&rsaquo;&rsaquo;';
-	} else {
-		$shownum = $showkbd = FALSE;
-		if(defined('IN_MOBILE') && !defined('TPL_DEFAULT')) {
-			$lang['prev'] = lang('core', 'prevpage');
-			$lang['next'] = lang('core', 'nextpage');
-		} else {
-			$lang['prev'] = '&nbsp;&nbsp;';
-			$lang['next'] = lang('core', 'nextpage');
-		}
-	}
-	if(defined('IN_MOBILE') && !defined('TPL_DEFAULT')) {
-		$dot = '..';
-		$page = intval($page) < 10 && intval($page) > 0 ? $page : 4 ;
-	} else {
-		$dot = '...';
-	}
-	$multipage = '';
-	$mpurl .= strpos($mpurl, '?') !== FALSE ? '&amp;' : '?';
-
-	$realpages = 1;
-	$_G['page_next'] = 0;
-	$page -= strlen($curpage) - 1;
-	if($page <= 0) {
-		$page = 1;
-	}
-	if($num > $perpage) {
-
-		$offset = floor($page * 0.5);
-
-		$realpages = @ceil($num / $perpage);
-		$pages = $maxpages && $maxpages < $realpages ? $maxpages : $realpages;
-
-		if($page > $pages) {
-			$from = 1;
-			$to = $pages;
-		} else {
-			$from = $curpage - $offset;
-			$to = $from + $page - 1;
-			if($from < 1) {
-				$to = $curpage + 1 - $from;
-				$from = 1;
-				if($to - $from < $page) {
-					$to = $page;
-				}
-			} elseif($to > $pages) {
-				$from = $pages - $page + 1;
-				$to = $pages;
-			}
-		}
-		$_G['page_next'] = $to;
-		$multipage = ($curpage - $offset > 1 && $pages > $page ? '<a href="'.$mpurl.'page=1'.$a_name.'" class="first"'.$ajaxtarget.'>1 '.$dot.'</a>' : '').
-		($curpage > 1 && !$simple ? '<a href="'.$mpurl.'page='.($curpage - 1).$a_name.'" class="prev"'.$ajaxtarget.'>'.$lang['prev'].'</a>' : '');
-		for($i = $from; $i <= $to; $i++) {
-			$multipage .= $i == $curpage ? '<strong>'.$i.'</strong>' :
-			'<a href="'.$mpurl.'page='.$i.($ajaxtarget && $i == $pages && $autogoto ? '#' : $a_name).'"'.$ajaxtarget.'>'.$i.'</a>';
-		}
-		$multipage .= ($to < $pages ? '<a href="'.$mpurl.'page='.$pages.$a_name.'" class="last"'.$ajaxtarget.'>'.$dot.' '.$realpages.'</a>' : '').
-		($curpage < $pages && !$simple ? '<a href="'.$mpurl.'page='.($curpage + 1).$a_name.'" class="nxt"'.$ajaxtarget.'>'.$lang['next'].'</a>' : '').
-		($showkbd && !$simple && $pages > $page && !$ajaxtarget ? '<kbd><input type="text" name="custompage" size="3" onkeydown="if(event.keyCode==13) {window.location=\''.$mpurl.'page=\'+this.value; doane(event);}" /></kbd>' : '');
-
-		$multipage = $multipage ? '<div class="pg">'.($shownum && !$simple ? '<em>&nbsp;'.$num.'&nbsp;</em>' : '').$multipage.'</div>' : '';
-	}
-	$maxpage = $realpages;
-	return $multipage;
+function multi($num, $perpage, $curpage, $mpurl, $maxpages = 0, $page = 10, $autogoto = FALSE, $simple = FALSE, $jsfunc = FALSE) {
+	return $num > $perpage ? helper_page::multi($num, $perpage, $curpage, $mpurl, $maxpages, $page, $autogoto, $simple, $jsfunc) : '';
 }
 
 function simplepage($num, $perpage, $curpage, $mpurl) {
-	$return = '';
-	$lang['next'] = lang('core', 'nextpage');
-	$lang['prev'] = lang('core', 'prevpage');
-	$next = $num == $perpage ? '<a href="'.$mpurl.'&amp;page='.($curpage + 1).'" class="nxt">'.$lang['next'].'</a>' : '';
-	$prev = $curpage > 1 ? '<span class="pgb"><a href="'.$mpurl.'&amp;page='.($curpage - 1).'">'.$lang['prev'].'</a></span>' : '';
-	if($next || $prev) {
-		$return = '<div class="pg">'.$prev.$next.'</div>';
-	}
-	return $return;
+	return helper_page::simplepage($num, $perpage, $curpage, $mpurl);
 }
 
 function censor($message, $modword = NULL, $return = FALSE) {
-	global $_G;
-	require_once libfile('class/censor');
-	$censor = discuz_censor::instance();
-	$censor->check($message, $modword);
-	if($censor->modbanned() && !$_G['group']['ignorecensor']) {
-		$wordbanned = implode(', ', $censor->words_found);
-		if($return) {
-			return array('message' => lang('message', 'word_banned', array('wordbanned' => $wordbanned)));
-		}
-		if(!defined('IN_ADMINCP')) {
-			showmessage('word_banned', '', array('wordbanned' => $wordbanned));
-		} else {
-			cpmsg(lang('message', 'word_banned'), '', 'error', array('wordbanned' => $wordbanned));
-		}
-	}
-	if($_G['group']['allowposturl'] == 0 || $_G['group']['allowposturl'] == 2) {
-		$urllist = get_url_list($message);
-		if(is_array($urllist[1])) foreach($urllist[1] as $key => $val) {
-			if(!$val = trim($val)) continue;
-			if(!iswhitelist($val)) {
-				if($_G['group']['allowposturl'] == 0) {
-					showmessage('post_url_nopermission');
-				} elseif($_G['group']['allowposturl'] == 2) {
-					$message = str_replace('[url]'.$urllist[0][$key].'[/url]', $urllist[0][$key], $message);
-					$message = preg_replace(
-						array(
-							"@\[url=.*?".preg_quote($urllist[0][$key],'@').".*?\](.*?)\[/url\]@is",
-							"@href=('|\")".preg_quote($urllist[0][$key],'@')."\\1@is",
-							"@\[url\](.*?".preg_quote($urllist[0][$key],'@').".*?)\[/url\]@is",
-						),
-						array(
-							'\\1',
-							'',
-							'\\1',
-						),
-						$message);
-				}
-			}
-		}
-	}
-	return $message;
+	return helper_form::censor($message, $modword, $return);
 }
 
 function censormod($message) {
-	global $_G;
-	if($_G['group']['ignorecensor']) {
-		return false;
-	}
-	$modposturl = false;
-	if($_G['group']['allowposturl'] == 1) {
-		$urllist = get_url_list($message);
-		if(is_array($urllist[1])) foreach($urllist[1] as $key => $val) {
-			if(!$val = trim($val)) continue;
-			if(!iswhitelist($val)) {
-				$modposturl = true;
-			}
-		}
-	}
-	if($modposturl) {
-		return true;
-	}
-
-	require_once libfile('class/censor');
-	$censor = discuz_censor::instance();
-	$censor->check($message);
-	return $censor->modmoderated();
+	return getglobal('group/ignorecensor') || !$message ? false :helper_form::censormod($message);
 }
 
-function space_merge(&$values, $tablename) {
+function space_merge(&$values, $tablename, $isarchive = false) {
 	global $_G;
 
 	$uid = empty($values['uid'])?$_G['uid']:$values['uid'];
 	$var = "member_{$uid}_{$tablename}";
 	if($uid) {
 		if(!isset($_G[$var])) {
-			$query = DB::query("SELECT * FROM ".DB::table('common_member_'.$tablename)." WHERE uid='$uid'");
-			if($_G[$var] = DB::fetch($query)) {
+			$ext = $isarchive ? '_archive' : '';
+			if(($_G[$var] = C::t('common_member_'.$tablename.$ext)->fetch($uid)) !== false) {
 				if($tablename == 'field_home') {
-					$_G['setting']['privacy'] = empty($_G['setting']['privacy']) ? array() : (is_array($_G['setting']['privacy']) ? $_G['setting']['privacy'] : unserialize($_G['setting']['privacy']));
-					$_G[$var]['privacy'] = empty($_G[$var]['privacy'])? array() : is_array($_G[$var]['privacy']) ? $_G[$var]['privacy'] : unserialize($_G[$var]['privacy']);
+					$_G['setting']['privacy'] = empty($_G['setting']['privacy']) ? array() : (is_array($_G['setting']['privacy']) ? $_G['setting']['privacy'] : dunserialize($_G['setting']['privacy']));
+					$_G[$var]['privacy'] = empty($_G[$var]['privacy'])? array() : is_array($_G[$var]['privacy']) ? $_G[$var]['privacy'] : dunserialize($_G[$var]['privacy']);
 					foreach (array('feed','view','profile') as $pkey) {
 						if(empty($_G[$var]['privacy'][$pkey]) && !isset($_G[$var]['privacy'][$pkey])) {
 							$_G[$var]['privacy'][$pkey] = isset($_G['setting']['privacy'][$pkey]) ? $_G['setting']['privacy'][$pkey] : array();
 						}
 					}
-					$_G[$var]['acceptemail'] = empty($_G[$var]['acceptemail'])? array() : unserialize($_G[$var]['acceptemail']);
+					$_G[$var]['acceptemail'] = empty($_G[$var]['acceptemail'])? array() : dunserialize($_G[$var]['acceptemail']);
 					if(empty($_G[$var]['acceptemail'])) {
-						$_G[$var]['acceptemail'] = empty($_G['setting']['acceptemail'])?array():unserialize($_G['setting']['acceptemail']);
+						$_G[$var]['acceptemail'] = empty($_G['setting']['acceptemail'])?array():dunserialize($_G['setting']['acceptemail']);
 					}
 				}
 			} else {
-				DB::insert('common_member_'.$tablename, array('uid'=>$uid));
+				C::t('common_member_'.$tablename.$ext)->insert(array('uid'=>$uid));
 				$_G[$var] = array();
 			}
 		}
@@ -1742,20 +1456,12 @@ function space_merge(&$values, $tablename) {
 }
 
 function runlog($file, $message, $halt=0) {
-	global $_G;
-
-	$nowurl = $_SERVER['REQUEST_URI']?$_SERVER['REQUEST_URI']:($_SERVER['PHP_SELF']?$_SERVER['PHP_SELF']:$_SERVER['SCRIPT_NAME']);
-	$log = dgmdate($_G['timestamp'], 'Y-m-d H:i:s')."\t".$_G['clientip']."\t$_G[uid]\t{$nowurl}\t".str_replace(array("\r", "\n"), array(' ', ' '), trim($message))."\n";
-	writelog($file, $log);
-	if($halt) {
-		exit();
-	}
+	helper_log::runlog($file, $message, $halt);
 }
 
 function stripsearchkey($string) {
 	$string = trim($string);
 	$string = str_replace('*', '%', addcslashes($string, '%_'));
-	$string = str_replace('_', '\_', $string);
 	return $string;
 }
 
@@ -1774,13 +1480,13 @@ function dreferer($default = '') {
 	global $_G;
 
 	$default = empty($default) ? $GLOBALS['_t_curapp'] : '';
-	$_G['referer'] = !empty($_G['gp_referer']) ? $_G['gp_referer'] : $_SERVER['HTTP_REFERER'];
+	$_G['referer'] = !empty($_GET['referer']) ? $_GET['referer'] : $_SERVER['HTTP_REFERER'];
 	$_G['referer'] = substr($_G['referer'], -1) == '?' ? substr($_G['referer'], 0, -1) : $_G['referer'];
 
 	if(strpos($_G['referer'], 'member.php?mod=logging')) {
 		$_G['referer'] = $default;
 	}
-	$_G['referer'] = htmlspecialchars($_G['referer'], ENT_QUOTES);
+	$_G['referer'] = dhtmlspecialchars($_G['referer'], ENT_QUOTES);
 	$_G['referer'] = str_replace('&amp;', '&', $_G['referer']);
 	$reurl = parse_url($_G['referer']);
 	if(!empty($reurl['host']) && !in_array($reurl['host'], array($_SERVER['HTTP_HOST'], 'www.'.$_SERVER['HTTP_HOST'])) && !in_array($_SERVER['HTTP_HOST'], array($reurl['host'], 'www.'.$reurl['host']))) {
@@ -1793,6 +1499,7 @@ function dreferer($default = '') {
 	} elseif(empty($reurl['host'])) {
 		$_G['referer'] = $_G['siteurl'].'./'.$_G['referer'];
 	}
+
 	return strip_tags($_G['referer']);
 }
 
@@ -1802,7 +1509,6 @@ function ftpcmd($cmd, $arg1 = '') {
 	if(!$ftpon) {
 		return $cmd == 'error' ? -101 : 0;
 	} elseif($ftp == null) {
-		require_once libfile('class/ftp');
 		$ftp = & discuz_ftp::instance();
 	}
 	if(!$ftp->enabled) {
@@ -1842,7 +1548,6 @@ function diconv($str, $in_charset, $out_charset = CHARSET, $ForceTable = FALSE) 
 	}
 
 	if($out == '') {
-		require_once libfile('class/chinese');
 		$chinese = new Chinese($in_charset, $out_charset, true);
 		$out = $chinese->Convert($str);
 	}
@@ -1850,6 +1555,20 @@ function diconv($str, $in_charset, $out_charset = CHARSET, $ForceTable = FALSE) 
 	return $out;
 }
 
+function widthauto() {
+	global $_G;
+	if($_G['disabledwidthauto']) {
+		return 0;
+	}
+	if(!empty($_G['widthauto'])) {
+		return $_G['widthauto'] > 0 ? 1 : 0;
+	}
+	if($_G['setting']['switchwidthauto'] && !empty($_G['cookie']['widthauto'])) {
+		return $_G['cookie']['widthauto'] > 0 ? 1 : 0;
+	} else {
+		return $_G['setting']['allowwidthauto'] ? 0 : 1;
+	}
+}
 function renum($array) {
 	$newnums = $nums = array();
 	foreach ($array as $id => $num) {
@@ -1857,16 +1576,6 @@ function renum($array) {
 		$nums[$num] = $num;
 	}
 	return array($nums, $newnums);
-}
-
-function getonlinenum($fid = 0, $tid = 0) {
-	if($fid) {
-		$sql = " AND fid='$fid'";
-	}
-	if($tid) {
-		$sql = " AND tid='$tid'";
-	}
-	return DB::result_first('SELECT count(*) FROM '.DB::table("common_session")." WHERE 1 $sql");
 }
 
 function sizecount($size) {
@@ -1889,36 +1598,7 @@ function swapclass($class1, $class2 = '') {
 }
 
 function writelog($file, $log) {
-	global $_G;
-	$yearmonth = dgmdate(TIMESTAMP, 'Ym', $_G['setting']['timeoffset']);
-	$logdir = DISCUZ_ROOT.'./data/log/';
-	$logfile = $logdir.$yearmonth.'_'.$file.'.php';
-	if(@filesize($logfile) > 2048000) {
-		$dir = opendir($logdir);
-		$length = strlen($file);
-		$maxid = $id = 0;
-		while($entry = readdir($dir)) {
-			if(strpos($entry, $yearmonth.'_'.$file) !== false) {
-				$id = intval(substr($entry, $length + 8, -4));
-				$id > $maxid && $maxid = $id;
-			}
-		}
-		closedir($dir);
-
-		$logfilebak = $logdir.$yearmonth.'_'.$file.'_'.($maxid + 1).'.php';
-		@rename($logfile, $logfilebak);
-	}
-	if($fp = @fopen($logfile, 'a')) {
-		@flock($fp, 2);
-		$log = is_array($log) ? $log : array($log);
-		foreach($log as $tmp) {
-			fwrite($fp, "<?PHP exit;?>\t".str_replace(array('<?', '?>'), '', $tmp)."\n");
-		}
-		fclose($fp);
-	}
-}
-function getcolorpalette($colorid, $id, $background, $fun = '') {
-	return "<input id=\"c$colorid\" onclick=\"c{$colorid}_frame.location='static/image/admincp/getcolor.htm?c{$colorid}|{$id}|{$fun}';showMenu({'ctrlid':'c$colorid'})\" type=\"button\" class=\"colorwd\" value=\"\" style=\"background: $background\"><span id=\"c{$colorid}_menu\" style=\"display: none\"><iframe name=\"c{$colorid}_frame\" src=\"\" frameborder=\"0\" width=\"210\" height=\"148\" scrolling=\"no\"></iframe></span>";
+	helper_log::writelog($file, $log);
 }
 
 function getstatus($status, $position) {
@@ -1939,100 +1619,15 @@ function setstatus($position, $value, $baseon = null) {
 }
 
 function notification_add($touid, $type, $note, $notevars = array(), $system = 0) {
-	global $_G;
-
-	$tospace = array('uid'=>$touid);
-	space_merge($tospace, 'field_home');
-	$filter = empty($tospace['privacy']['filter_note'])?array():array_keys($tospace['privacy']['filter_note']);
-
-	if($filter && (in_array($type.'|0', $filter) || in_array($type.'|'.$_G['uid'], $filter))) {
-		return false;
-	}
-
-	$notevars['actor'] = "<a href=\"home.php?mod=space&uid=$_G[uid]\">".$_G['member']['username']."</a>";
-	if(!is_numeric($type)) {
-		$vars = explode(':', $note);
-		if(count($vars) == 2) {
-			$notestring = lang('plugin/'.$vars[0], $vars[1], $notevars);
-		} else {
-			$notestring = lang('notification', $note, $notevars);
-		}
-		$frommyapp = false;
-	} else {
-		$frommyapp = true;
-		$notestring = $note;
-	}
-
-	$oldnote = array();
-	if($notevars['from_id'] && $notevars['from_idtype']) {
-		$oldnote = DB::fetch_first("SELECT * FROM ".DB::table('home_notification')."
-			WHERE from_id='$notevars[from_id]' AND from_idtype='$notevars[from_idtype]' AND uid='$touid'");
-	}
-	if(empty($oldnote['from_num'])) $oldnote['from_num'] = 0;
-	$notevars['from_num'] = $notevars['from_num'] ? $notevars['from_num'] : 1;
-	$setarr = array(
-		'uid' => $touid,
-		'type' => $type,
-		'new' => 1,
-		'authorid' => $_G['uid'],
-		'author' => $_G['username'],
-		'note' => addslashes($notestring),
-		'dateline' => $_G['timestamp'],
-		'from_id' => $notevars['from_id'],
-		'from_idtype' => $notevars['from_idtype'],
-		'from_num' => ($oldnote['from_num']+$notevars['from_num'])
-	);
-	if($system) {
-		$setarr['authorid'] = 0;
-		$setarr['author'] = '';
-	}
-
-	if($oldnote['id']) {
-		DB::update('home_notification', $setarr, array('id'=>$oldnote['id']));
-	} else {
-		$oldnote['new'] = 0;
-		DB::insert('home_notification', $setarr);
-	}
-
-	if(empty($oldnote['new'])) {
-		DB::query("UPDATE ".DB::table('common_member')." SET newprompt=newprompt+1 WHERE uid='$touid'");
-
-		require_once libfile('function/mail');
-		$mail_subject = lang('notification', 'mail_to_user');
-		sendmail_touser($touid, $mail_subject, $notestring, $frommyapp ? 'myapp' : $type);
-	}
-
-	if(!$system && $_G['uid'] && $touid != $_G['uid']) {
-		DB::query("UPDATE ".DB::table('home_friend')." SET num=num+1 WHERE uid='$_G[uid]' AND fuid='$touid'");
-	}
+	return helper_notification::notification_add($touid, $type, $note, $notevars, $system);
 }
 
 function manage_addnotify($type, $from_num = 0, $langvar = array()) {
-	global $_G;
-	$notifyusers = unserialize($_G['setting']['notifyusers']);
-	$notifytypes = explode(',', $_G['setting']['adminnotifytypes']);
-	$notifytypes = array_flip($notifytypes);
-	$notearr = array('from_id' => 1,'from_idtype' => $type, 'from_num' => $from_num);
-	if($langvar) {
-		$langkey = $langvar['langkey'];
-		$notearr = array_merge($notearr, $langvar);
-	} else {
-		$langkey = 'manage_'.$type;
-	}
-	foreach($notifyusers as $uid => $user) {
-		if($user['types'][$notifytypes[$type]]) {
-			notification_add($uid, $type, $langkey, $notearr, 1);
-		}
-	}
+	helper_notification::manage_addnotify($type, $from_num, $langvar);
 }
 
 function sendpm($toid, $subject, $message, $fromid = '', $replypmid = 0, $isusername = 0, $type = 0) {
-	global $_G;
-	if($fromid === '') {
-		$fromid = $_G['uid'];
-	}
-	loaducenter();
-	return uc_pm_send($fromid, $toid, $subject, $message, 1, $replypmid, $isusername, $type);
+	return helper_pm::sendpm($toid, $subject, $message, $fromid, $replypmid, $isusername, $type);
 }
 
 function g_icon($groupid, $return = 0) {
@@ -2052,92 +1647,49 @@ function g_icon($groupid, $return = 0) {
 		echo $s;
 	}
 }
-function updatediytemplate($targettplname = '') {
-	global $_G;
+function updatediytemplate($targettplname = '', $tpldirectory = '') {
 	$r = false;
-	$where = empty($targettplname) ? '' : " WHERE targettplname='$targettplname'";
-	$query = DB::query("SELECT * FROM ".DB::table('common_diy_data')."$where");
+	$alldata = !empty($targettplname) ? array( C::t('common_diy_data')->fetch($targettplname, $tpldirectory)) : C::t('common_diy_data')->range();
 	require_once libfile('function/portalcp');
-	while($value = DB::fetch($query)) {
-		$r = save_diy_data($value['primaltplname'], $value['targettplname'], unserialize($value['diycontent']));
+	foreach($alldata as $value) {
+		$r = save_diy_data($value['tpldirectory'], $value['primaltplname'], $value['targettplname'], dunserialize($value['diycontent']));
 	}
 	return $r;
 }
 
 function space_key($uid, $appid=0) {
 	global $_G;
-
-	$siteuniqueid = DB::result_first("SELECT svalue FROM ".DB::table('common_setting')." WHERE skey='siteuniqueid'");
-	return substr(md5($siteuniqueid.'|'.$uid.(empty($appid)?'':'|'.$appid)), 8, 16);
+	return substr(md5($_G['setting']['siteuniqueid'].'|'.$uid.(empty($appid)?'':'|'.$appid)), 8, 16);
 }
 
 
 function getposttablebytid($tids, $primary = 0) {
-	global $_G;
-
-	$isstring = false;
-	if(!is_array($tids)) {
-		$tids = array(intval($tids));
-		$isstring = true;
-	}
-	$tids = array_unique($tids);
-	$tids = array_flip($tids);
-	if(!$primary) {
-		loadcache('threadtableids');
-		$threadtableids = !empty($_G['cache']['threadtableids']) ? $_G['cache']['threadtableids'] : array();
-		if(!in_array(0, $threadtableids)) {
-			$threadtableids = array_merge(array(0), $threadtableids);
-		}
-	} else {
-		$threadtableids = array(0);
-	}
-	$tables = array();
-	$posttable = '';
-	$singletable = count($tids) > 1 ? false : true;
-	foreach($threadtableids as $tableid) {
-		$threadtable = $tableid ? "forum_thread_$tableid" : 'forum_thread';
-		$query = DB::query("SELECT tid, posttableid FROM ".DB::table($threadtable)." WHERE tid IN(".dimplode(array_keys($tids)).")");
-		while ($value = DB::fetch($query)) {
-			$posttable = 'forum_post'.($value['posttableid'] ? "_$value[posttableid]" : '');
-			$tables[$posttable][$value['tid']] = $value['tid'];
-			unset($tids[$value['tid']]);
-		}
-		if(!count($tids)) {
-			break;
-		}
-	}
-	if(empty($posttable)) {
-		$posttable = 'forum_post';
-		$tables[$posttable] = array_flip($tids);
-	}
-	return $isstring ? $posttable : $tables;
+	return table_forum_post::getposttablebytid($tids, $primary);
 }
 
 function getposttable($tableid = 0, $prefix = false) {
-	global $_G;
-	$tableid = intval($tableid);
-	if($tableid) {
-		loadcache('posttableids');
-		$tableid = $_G['cache']['posttableids'] && in_array($tableid, $_G['cache']['posttableids']) ? $tableid : 0;
-		$tablename = 'forum_post'.($tableid ? "_$tableid" : '');
-	} else {
-		$tablename = 'forum_post';
-	}
-	if($prefix) {
-		$tablename = DB::table($tablename);
-	}
-	return $tablename;
+	return table_forum_post::getposttable($tableid, $prefix);
 }
 
-function memory($cmd, $key='', $value='', $ttl = 0) {
-	$discuz = & discuz_core::instance();
+function memory($cmd, $key='', $value='', $ttl = 0, $prefix = '') {
 	if($cmd == 'check') {
-		return  $discuz->mem->enable ? $discuz->mem->type : '';
-	} elseif($discuz->mem->enable && in_array($cmd, array('set', 'get', 'rm'))) {
+		return  C::memory()->enable ? C::memory()->type : '';
+	} elseif(C::memory()->enable && in_array($cmd, array('set', 'get', 'rm', 'inc', 'dec'))) {
+		if(defined('DISCUZ_DEBUG') && DISCUZ_DEBUG) {
+			if(is_array($key)) {
+				foreach($key as $k) {
+					C::memory()->debug[$cmd][] = ($cmd == 'get' || $cmd == 'rm' ? $value : '').$prefix.$k;
+				}
+			} else {
+				C::memory()->debug[$cmd][] = ($cmd == 'get' || $cmd == 'rm' ? $value : '').$prefix.$key;
+			}
+		}
 		switch ($cmd) {
-			case 'set': return $discuz->mem->set($key, $value, $ttl); break;
-			case 'get': return $discuz->mem->get($key); break;
-			case 'rm': return $discuz->mem->rm($key); break;
+			case 'set': return C::memory()->set($key, $value, $ttl, $prefix); break;
+			case 'get': return C::memory()->get($key, $value); break;
+			case 'rm': return C::memory()->rm($key, $value); break;
+			case 'inc': return C::memory()->inc($key, $value ? $value : 1); break;
+			case 'dec': return C::memory()->dec($key, $value ? $value : -1); break;
 		}
 	}
 	return null;
@@ -2179,8 +1731,7 @@ function getcount($tablename, $condition) {
 }
 
 function sysmessage($message) {
-	require libfile('function/sysmessage');
-	show_system_message($message);
+	helper_sysmessage::show($message);
 }
 
 function forumperm($permstr, $groupid = 0) {
@@ -2206,27 +1757,37 @@ function forumperm($permstr, $groupid = 0) {
 	return preg_match("/(^|\t)(".implode('|', $groupidarray).")(\t|$)/", $permstr);
 }
 
-if(!function_exists('file_put_contents')) {
-	if(!defined('FILE_APPEND')) define('FILE_APPEND', 8);
-	function file_put_contents($filename, $data, $flag = 0) {
-		$return = false;
-		if($fp = @fopen($filename, $flag != FILE_APPEND ? 'w' : 'a')) {
-			if($flag == LOCK_EX) @flock($fp, LOCK_EX);
-			$return = fwrite($fp, is_array($data) ? implode('', $data) : $data);
-			fclose($fp);
-		}
-		return $return;
-	}
-}
-
 function checkperm($perm) {
 	global $_G;
-	return (empty($_G['group'][$perm])?'':$_G['group'][$perm]);
+	return defined('IN_ADMINCP') ? true : (empty($_G['group'][$perm])?'':$_G['group'][$perm]);
 }
 
 function periodscheck($periods, $showmessage = 1) {
 	global $_G;
-
+	if(($periods == 'postmodperiods' || $periods == 'postbanperiods') && ($_G['setting']['postignorearea'] || $_G['setting']['postignoreip'])) {
+		if($_G['setting']['postignoreip']) {
+			foreach(explode("\n", $_G['setting']['postignoreip']) as $ctrlip) {
+				if(preg_match("/^(".preg_quote(($ctrlip = trim($ctrlip)), '/').")/", $_G['clientip'])) {
+					return false;
+					break;
+				}
+			}
+		}
+		if($_G['setting']['postignorearea']) {
+			$location = $whitearea = '';
+			require_once libfile('function/misc');
+			$location = trim(convertip($_G['clientip'], "./"));
+			if($location) {
+				$whitearea = preg_quote(trim($_G['setting']['postignorearea']), '/');
+				$whitearea = str_replace(array("\\*"), array('.*'), $whitearea);
+				$whitearea = '.*'.$whitearea.'.*';
+				$whitearea = '/^('.str_replace(array("\r\n", ' '), array('.*|.*', ''), $whitearea).')$/i';
+				if(@preg_match($whitearea, $location)) {
+					return false;
+				}
+			}
+		}
+	}
 	if(!$_G['group']['disableperiodctrl'] && $_G['setting'][$periods]) {
 		$now = dgmdate(TIMESTAMP, 'G.i', $_G['setting']['timeoffset']);
 		foreach(explode("\r\n", str_replace(':', '.', $_G['setting'][$periods])) as $period) {
@@ -2257,21 +1818,21 @@ function cknewuser($return=0) {
 	$ckuser = $_G['member'];
 
 	if($_G['setting']['newbiespan'] && $_G['timestamp']-$ckuser['regdate']<$_G['setting']['newbiespan']*60) {
-		if(empty($return)) showmessage('no_privilege_newbiespan', '', array('newbiespan' => $_G['setting']['newbiespan']), array('return' => true));
+		if(empty($return)) showmessage('no_privilege_newbiespan', '', array('newbiespan' => $_G['setting']['newbiespan']), array());
 		$result = false;
 	}
 	if($_G['setting']['need_avatar'] && empty($ckuser['avatarstatus'])) {
-		if(empty($return)) showmessage('no_privilege_avatar', '', array(), array('return' => true));
+		if(empty($return)) showmessage('no_privilege_avatar', '', array(), array());
 		$result = false;
 	}
 	if($_G['setting']['need_email'] && empty($ckuser['emailstatus'])) {
-		if(empty($return)) showmessage('no_privilege_email', '', array(), array('return' => true));
+		if(empty($return)) showmessage('no_privilege_email', '', array(), array());
 		$result = false;
 	}
 	if($_G['setting']['need_friendnum']) {
 		space_merge($ckuser, 'count');
 		if($ckuser['friends'] < $_G['setting']['need_friendnum']) {
-			if(empty($return)) showmessage('no_privilege_friendnum', '', array('friendnum' => $_G['setting']['need_friendnum']), array('return' => true));
+			if(empty($return)) showmessage('no_privilege_friendnum', '', array('friendnum' => $_G['setting']['need_friendnum']), array());
 			$result = false;
 		}
 	}
@@ -2279,55 +1840,23 @@ function cknewuser($return=0) {
 }
 
 function manyoulog($logtype, $uids, $action, $fid = '') {
-	global $_G;
-
-	if($_G['setting']['my_app_status'] && $logtype == 'user') {
-		$action = daddslashes($action);
-		$values = array();
-		$uids = is_array($uids) ? $uids : array($uids);
-		foreach($uids as $uid) {
-			$uid = intval($uid);
-			$values[$uid] = "('$uid', '$action', '".TIMESTAMP."')";
-		}
-		if($values) {
-			DB::query("REPLACE INTO ".DB::table('common_member_log')." (`uid`, `action`, `dateline`) VALUES ".implode(',', $values));
-		}
-	}
+	helper_manyou::manyoulog($logtype, $uids, $action, $fid);
 }
 
 function useractionlog($uid, $action) {
-	$uid = intval($uid);
-	if(empty($uid) || empty($action)) {
-		return false;
-	}
-	$action = getuseraction($action);
-	$timestamp = TIMESTAMP;
-	DB::query("INSERT INTO ".DB::table('common_member_action_log')." (`uid`, `action`, `dateline`) VALUES ('$uid', '$action', '$timestamp')");
-	return true;
+	return helper_log::useractionlog($uid, $action);
 }
 
 function getuseraction($var) {
-	$value = false;
-	$ops = array('tid', 'pid', 'blogid', 'picid', 'doid', 'sid', 'aid', 'uid_cid', 'blogid_cid', 'sid_cid', 'picid_cid', 'aid_cid', 'topicid_cid');
-	if(is_numeric($var)) {
-		$value = isset($ops[$var]) ? $ops[$var] : false;
-	} else {
-		$value = array_search($var, $ops);
-	}
-	return $value;
+	return helper_log::getuseraction($var);
 }
 
 function getuserapp($panel = 0) {
-	require_once libfile('function/manyou');
-	manyou_getuserapp($panel);
-	return true;
+	return helper_manyou::getuserapp($panel);
 }
 
 function getmyappiconpath($appid, $iconstatus=0) {
-	if($iconstatus > 0) {
-		return getglobal('setting/attachurl').'./'.'myapp/icon/'.$appid.'.jpg';
-	}
-	return 'http://appicon.manyou.com/icons/'.$appid;
+	return helper_manyou::getmyappiconpath($appid, $iconstatus);
 }
 
 function getexpiration() {
@@ -2347,26 +1876,6 @@ function return_bytes($val) {
     return $val;
 }
 
-function get_url_list($message) {
-	$return = array();
-
-	(strpos($message, '[/img]') || strpos($message, '[/flash]')) && $message = preg_replace("/\[img[^\]]*\]\s*([^\[\<\r\n]+?)\s*\[\/img\]|\[flash[^\]]*\]\s*([^\[\<\r\n]+?)\s*\[\/flash\]/is", '', $message);
-	if(preg_match_all("/((https?|ftp|gopher|news|telnet|rtsp|mms|callto|bctp|thunder|qqdl|synacast){1}:\/\/|www\.)[^\[\]\"']+/i", $message, $urllist)) {
-		foreach($urllist[0] as $key => $val) {
-			$val = trim($val);
-			$return[0][$key] = $val;
-			if(!preg_match('/^http:\/\//is', $val)) $val = 'http://'.$val;
-			$tmp = parse_url($val);
-			$return[1][$key] = $tmp['host'];
-			if($tmp['port']){
-				$return[1][$key] .= ":$tmp[port]";
-			}
-		}
-	}
-
-	return $return;
-}
-
 function iswhitelist($host) {
 	global $_G;
 	static $iswhitelist = array();
@@ -2376,6 +1885,9 @@ function iswhitelist($host) {
 	}
 	$hostlen = strlen($host);
 	$iswhitelist[$host] = false;
+	if(!$_G['cache']['domainwhitelist']) {
+		loadcache('domainwhitelist');
+	}
 	if(is_array($_G['cache']['domainwhitelist'])) foreach($_G['cache']['domainwhitelist'] as $val) {
 		$domainlen = strlen($val);
 		if($domainlen > $hostlen) {
@@ -2392,88 +1904,9 @@ function iswhitelist($host) {
 	return $iswhitelist[$host];
 }
 
-function update_template_block($targettplname, $blocks) {
-	if(!empty($targettplname)) {
-		if(empty($blocks)) {
-			DB::delete('common_template_block', array('targettplname'=>$targettplname));
-		} else {
-			$oldbids = array();
-			$query = DB::query('SELECT bid FROM '.DB::table('common_template_block')." WHERE targettplname='$targettplname'");
-			while($value = DB::fetch($query)) {
-				$oldbids[] = $value['bid'];
-			}
-			$newaddbids = array_diff($blocks, $oldbids);
-			DB::delete('common_template_block', array('targettplname'=>$targettplname));
-			$blocks = array_unique($blocks);
-			$values = array();
-			foreach ($blocks as $bid) {
-				$values[] = "('$targettplname','$bid')";
-			}
-			if (!empty($values)) {
-				DB::query("INSERT INTO ".DB::table('common_template_block')." (targettplname,bid) VALUES ".implode(',', $values));
-			}
-			if(!empty($newaddbids)) {
-				require_once libfile('class/blockpermission');
-				$tplpermission = & template_permission::instance();
-				$tplpermission->add_blocks($targettplname, $newaddbids);
-			}
-		}
-	}
-}
-
-if(!function_exists('http_build_query')) {
-	function http_build_query($data, $numeric_prefix='', $arg_separator='', $prefix='') {
-		$render = array();
-		if (empty($arg_separator)) {
-			$arg_separator = ini_get('arg_separator.output');
-			empty($arg_separator) && $arg_separator = '&';
-		}
-		foreach ((array) $data as $key => $val) {
-			if (is_array($val) || is_object($val)) {
-				$_key = empty($prefix) ? "{$key}[%s]" : sprintf($prefix, $key) . "[%s]";
-				$_render = http_build_query($val, '', $arg_separator, $_key);
-				if (!empty($_render)) {
-					$render[] = $_render;
-				}
-			} else {
-				if (is_numeric($key) && empty($prefix)) {
-					$render[] = urlencode("{$numeric_prefix}{$key}") . "=" . urlencode($val);
-				} else {
-					if (!empty($prefix)) {
-						$_key = sprintf($prefix, $key);
-						$render[] = urlencode($_key) . "=" . urlencode($val);
-					} else {
-						$render[] = urlencode($key) . "=" . urlencode($val);
-					}
-				}
-			}
-		}
-		$render = implode($arg_separator, $render);
-		if (empty($render)) {
-			$render = '';
-		}
-		return $render;
-	}
-}
-
-function getrelatedlink($extent) {
-	global $_G;
-	loadcache('relatedlink');
-	$allextent = array('article' => 0, 'forum' => 1, 'group' => 2, 'blog' => 3);
-	$links = array();
-	if($_G['cache']['relatedlink'] && isset($allextent[$extent])) {
-		foreach($_G['cache']['relatedlink'] as $link) {
-			$link['extent'] = sprintf('%04b', $link['extent']);
-			if($link['extent'][$allextent[$extent]] && $link['name'] && $link['url']) {
-				$links[] = daddslashes($link);
-			}
-		}
-	}
-	return $links;
-}
-
 function getattachtablebyaid($aid) {
-	$tableid = DB::result_first("SELECT tableid FROM ".DB::table('forum_attachment')." WHERE aid='$aid'");
+	$attach = C::t('forum_attachment')->fetch($aid);
+	$tableid = $attach['tableid'];
 	return 'forum_attachment_'.($tableid >= 0 && $tableid < 10 ? intval($tableid) : 'unused');
 }
 
@@ -2494,53 +1927,13 @@ function getattachtablebypid($pid) {
 function getattachnewaid($uid = 0) {
 	global $_G;
 	$uid = !$uid ? $_G['uid'] : $uid;
-	return DB::insert('forum_attachment', array('tid' => 0, 'pid' => 0, 'uid' => $uid, 'tableid' => 127), true);
+	return C::t('forum_attachment')->insert(array('tid' => 0, 'pid' => 0, 'uid' => $uid, 'tableid' => 127), true);
 }
 
 function get_seosetting($page, $data = array(), $defset = array()) {
-	global $_G;
-	$searchs = array('{bbname}');
-	$replaces = array($_G['setting']['bbname']);
-
-	$seotitle = $seodescription = $seokeywords = '';
-	$titletext = $defset['seotitle'] ? $defset['seotitle'] : $_G['setting']['seotitle'][$page];
-	$descriptiontext = $defset['seodescription'] ? $defset['seodescription'] : $_G['setting']['seodescription'][$page];
-	$keywordstext = $defset['seokeywords'] ? $defset['seokeywords'] : $_G['setting']['seokeywords'][$page];
-	preg_match_all("/\{([a-z0-9_-]+?)\}/", $titletext.$descriptiontext.$keywordstext, $pageparams);
-	if($pageparams) {
-		foreach($pageparams[1] as $var) {
-			$searchs[] = '{'.$var.'}';
-			if($var == 'page') {
-				$data['page'] = $data['page'] > 1 ? lang('core', 'page', array('page' => $data['page'])) : '';
-			}
-			$replaces[] = $data[$var] ? strip_tags($data[$var]) : '';
-		}
-		if($titletext) {
-			$seotitle = strreplace_strip_split($searchs, $replaces, $titletext);
-		}
-		if($descriptiontext && (CURSCRIPT == 'forum' || IS_ROBOT || $_G['adminid'] == 1)) {
-			$seodescription = strreplace_strip_split($searchs, $replaces, $descriptiontext);
-		}
-		if($keywordstext && (CURSCRIPT == 'forum' || IS_ROBOT || $_G['adminid'] == 1)) {
-			$seokeywords = strreplace_strip_split($searchs, $replaces, $keywordstext);
-		}
-	}
-	return array($seotitle, $seodescription, $seokeywords);
+	return helper_seo::get_seosetting($page, $data, $defset);
 }
 
-
-function strreplace_strip_split($searchs, $replaces, $str) {
-	$searchspace = array('((\s*\-\s*)+)', '((\s*\,\s*)+)', '((\s*\|\s*)+)', '((\s*\t\s*)+)', '((\s*_\s*)+)');
-	$replacespace = array('-', ',', '|', ' ', '_');
-	return trim(preg_replace($searchspace, $replacespace, str_replace($searchs, $replaces, $str)), ' ,-|_');
-}
-
-function get_title_page($navtitle, $page){
-	if($page > 1) {
-		$navtitle .= ' - '.lang('core', 'page', array('page' => $page));
-	}
-	return $navtitle;
-}
 function getimgthumbname($fileStr, $extend='.thumb.jpg', $holdOldExt=true) {
 	if(empty($fileStr)) {
 		return '';
@@ -2553,20 +1946,7 @@ function getimgthumbname($fileStr, $extend='.thumb.jpg', $holdOldExt=true) {
 }
 
 function updatemoderate($idtype, $ids, $status = 0) {
-	global $_G;
-	$ids = is_array($ids) ? $ids : array($ids);
-	if(!$ids) {
-		return;
-	}
-	if(!$status) {
-		foreach($ids as $id) {
-			DB::insert('common_moderate', array('id' => $id, 'idtype' => $idtype, 'status' => 0, 'dateline' => $_G['timestamp']), false, true);
-		}
-	} elseif($status == 1) {
-		DB::update('common_moderate', array('status' => 1), "id IN (".dimplode($ids).") AND idtype='$idtype'");
-	} elseif($status == 2) {
-		DB::delete('common_moderate', "id IN (".dimplode($ids).") AND idtype='$idtype'");
-	}
+	helper_form::updatemoderate($idtype, $ids, $status);
 }
 
 function userappprompt() {
@@ -2581,58 +1961,115 @@ function userappprompt() {
 	}
 }
 
+function dintval($int, $allowarray = false) {
+	$ret = intval($int);
+	if($int == $ret || !$allowarray && is_array($int)) return $ret;
+	if($allowarray && is_array($int)) {
+		foreach($int as &$v) {
+			$v = dintval($v, true);
+		}
+		return $int;
+	} elseif($int <= 0xffffffff) {
+		$l = strlen($int);
+		$m = substr($int, 0, 1) == '-' ? 1 : 0;
+		if(($l - $m) === strspn($int,'0987654321', $m)) {
+			return $int;
+		}
+	}
+	return $ret;
+}
+
 
 function makeSearchSignUrl() {
-	global $_G;
-
-	$url = '';
-	$params = array();
-	$my_search_data = unserialize($_G['setting']['my_search_data']);
-	$my_siteid = $_G['setting']['my_siteid'];
-	$my_sitekey= $_G['setting']['my_sitekey'];
-	require_once libfile('function/cloud');
-	if($my_search_data['status'] && getcloudappstatus('search') && $my_siteid) {
-		$my_extgroupids = array();
-		$_extgroupids = explode("\t", $_G['member']['extgroupids']);
-		foreach($_extgroupids as $v) {
-			if ($v) {
-				$my_extgroupids[] = $v;
-			}
-		}
-		$my_extgroupids_str = implode(',', $my_extgroupids);
-		$params = array('sId' => $my_siteid,
-							'ts' => time(),
-							'cuId' => $_G['uid'],
-							'cuName' => $_G['username'],
-							'gId' => intval($_G['groupid']),
-							'agId' => intval($_G['adminid']),
-							'egIds' => $my_extgroupids_str,
-							'fmSign' => '',
-						   );
-		$groupIds = array($params['gId']);
-		if ($params['agId']) {
-			$groupIds[] = $params['agId'];
-		}
-		if ($my_extgroupids) {
-			$groupIds = array_merge($groupIds, $my_extgroupids);
-		}
-
-		$groupIds = array_unique($groupIds);
-		foreach($groupIds as $v) {
-			$key = 'ugSign' . $v;
-			$params[$key] = '';
-		}
-		$params['sign'] = md5(implode('|', $params) . '|' . $my_sitekey);
-
-		$params['charset'] = $_G['charset'];
-		$mySearchData = unserialize($_G['setting']['my_search_data']);
-		if ($mySearchData['domain']) {
-			$domain = $mySearchData['domain'];
-		} else {
-			$domain = 'search.discuz.qq.com';
-		}
-		$url = 'http://' . $domain . '/f/discuz';
-	}
-	return !empty($url) ? array($url, $params) : array();
+	return getglobal('setting/my_search_data/status') ? helper_manyou::makeSearchSignUrl() : array();
 }
+
+function get_related_link($extent) {
+	return helper_seo::get_related_link($extent);
+}
+
+function parse_related_link($content, $extent) {
+	return helper_seo::parse_related_link($content, $extent);
+}
+
+function check_diy_perm($topic = array(), $flag = '') {
+	static $ret;
+	if(!isset($ret)) {
+		global $_G;
+		$common = !empty($_G['style']['tplfile']) || $_GET['inajax'];
+		$blockallow = getstatus($_G['member']['allowadmincp'], 4) || getstatus($_G['member']['allowadmincp'], 5) || getstatus($_G['member']['allowadmincp'], 6);
+		$ret['data'] = $common && $blockallow;
+		$ret['layout'] = $common && ($_G['group']['allowdiy'] || (
+				CURMODULE === 'topic' && ($_G['group']['allowmanagetopic'] || $_G['group']['allowaddtopic'] && $topic && $topic['uid'] == $_G['uid'])
+				));
+	}
+	return empty($flag) ? $ret['data'] || $ret['layout'] : $ret[$flag];
+}
+
+function strhash($string, $operation = 'DECODE', $key = '') {
+	$key = md5($key != '' ? $key : getglobal('authkey'));
+	if($operation == 'DECODE') {
+		$hashcode = gzuncompress(base64_decode(($string)));
+		$string = substr($hashcode, 0, -16);
+		$hash = substr($hashcode, -16);
+		unset($hashcode);
+	}
+
+	$vkey = substr(md5($string.substr($key, 0, 16)), 4, 8).substr(md5($string.substr($key, 16, 16)), 18, 8);
+
+	if($operation == 'DECODE') {
+		return $hash == $vkey ? $string : '';
+	}
+
+	return base64_encode(gzcompress($string.$vkey));
+}
+
+function dunserialize($data) {
+	if(($ret = unserialize($data)) === false) {
+		$ret = unserialize(stripslashes($data));
+	}
+	return $ret;
+}
+
+function browserversion($type) {
+	static $return = array();
+	static $types = array('ie' => 'msie', 'firefox' => '', 'chrome' => '', 'opera' => '', 'safari' => '', 'mozilla' => '', 'webkit' => '', 'maxthon' => '', 'qq' => 'qqbrowser');
+	if(!$return) {
+		$useragent = strtolower($_SERVER['HTTP_USER_AGENT']);
+		$other = 1;
+		foreach($types as $i => $v) {
+			$v = $v ? $v : $i;
+			if(strpos($useragent, $v) !== false) {
+				preg_match('/'.$v.'(\/|\s)([\d\.]+)/i', $useragent, $matches);
+				$ver = $matches[2];
+				$other = $ver !== 0 && $v != 'mozilla' ? 0 : $other;
+			} else {
+				$ver = 0;
+			}
+			$return[$i] = $ver;
+		}
+		$return['other'] = $other;
+	}
+	return $return[$type];
+}
+
+function currentlang() {
+	$charset = strtoupper(CHARSET);
+	if($charset == 'GBK') {
+		return 'SC_GBK';
+	} elseif($charset == 'BIG5') {
+		return 'TC_BIG5';
+	} elseif($charset == 'UTF-8') {
+		global $_G;
+		if($_G['config']['output']['language'] == 'zh_cn') {
+			return 'SC_UTF8';
+		} elseif ($_G['config']['output']['language'] == 'zh_tw') {
+			return 'TC_UTF8';
+		}
+	} else {
+		return '';
+	}
+}
+
+
 ?>

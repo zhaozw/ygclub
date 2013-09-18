@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: forum_index.php 26665 2011-12-19 07:31:16Z zhengqingpeng $
+ *      $Id: forum_index.php 33354 2013-05-31 03:15:07Z andyzheng $
  */
 
 if(!defined('IN_DISCUZ')) {
@@ -21,10 +21,9 @@ if(!$_G['uid'] && !$gid && $_G['setting']['cacheindexlife'] && !defined('IN_ARCH
 }
 
 $newthreads = round((TIMESTAMP - $_G['member']['lastvisit'] + 600) / 1000) * 1000;
-$rsshead = $_G['setting']['rssstatus'] ? ('<link rel="alternate" type="application/rss+xml" title="'.$_G['setting']['bbname'].'" href="'.$_G['siteurl'].'forum.php?mod=rss&auth='.$_G['rssauth']."\" />\n") : '';
 
-$catlist = $forumlist = $sublist = $forumname = $collapseimg = $collapse = array();
-$threads = $posts = $todayposts = $fids = $announcepm = 0;
+$catlist = $forumlist = $sublist = $forumname = $collapse = $favforumlist = array();
+$threads = $posts = $todayposts = $announcepm = 0;
 $postdata = $_G['cache']['historyposts'] ? explode("\t", $_G['cache']['historyposts']) : array(0,0);
 $postdata[0] = intval($postdata[0]);
 $postdata[1] = intval($postdata[1]);
@@ -47,8 +46,81 @@ if($_G['setting']['indexhot']['status'] && $_G['cache']['heats']['expiration'] <
 	require_once libfile('function/cache');
 	updatecache('heats');
 }
-if(defined('IN_MOBILE')) {
-	@include DISCUZ_ROOT.'./source/module/forum/forum_index_mobile.php';
+
+if($_G['uid'] && empty($_G['cookie']['nofavfid'])) {
+	$favfids = array();
+	$forum_favlist = C::t('home_favorite')->fetch_all_by_uid_idtype($_G['uid'], 'fid');
+	if(!$forum_favlist) {
+		dsetcookie('nofavfid', 1, 31536000);
+	}
+	foreach($forum_favlist as $key => $favorite) {
+		if(defined('IN_MOBILE')) {
+			$forum_favlist[$key]['title'] = strip_tags($favorite['title']);
+		}
+		$favfids[] = $favorite['id'];
+	}
+	if($favfids) {
+		$favforumlist = C::t('forum_forum')->fetch_all($favfids);
+		$favforumlist_fields = C::t('forum_forumfield')->fetch_all($favfids);
+		foreach($favforumlist as $id => $forum) {
+			if($favforumlist_fields[$forum['fid']]['fid']) {
+				$favforumlist[$id] = array_merge($forum, $favforumlist_fields[$forum['fid']]);
+			}
+			forum($favforumlist[$id]);
+		}
+
+	}
+}
+
+
+if(!$gid && ($_G['setting']['collectionrecommendnum'] || !$_G['setting']['hidefollowcollection'])) {
+	require_once libfile('function/cache');
+	loadcache('collection_index');
+	$collectionrecommend = dunserialize($_G['setting']['collectionrecommend']);
+	if(TIMESTAMP - $_G['cache']['collection_index']['dateline'] > 300) {
+		$collectiondata = $followdata = array();
+		if($_G['setting']['collectionrecommendnum']) {
+			if($collectionrecommend['ctids']) {
+				$collectionrecommend['ctidsKey'] = array_keys($collectionrecommend['ctids']);
+				$tmpcollection = C::t('forum_collection')->fetch_all($collectionrecommend['ctidsKey']);
+				foreach($collectionrecommend['ctids'] as $ctid=>$setcollection) {
+					if($tmpcollection[$ctid]) {
+						$collectiondata[$ctid] = $tmpcollection[$ctid];
+					}
+				}
+				unset($tmpcollection, $ctid, $setcollection);
+			}
+			if($collectionrecommend['autorecommend']) {
+				require_once libfile('function/collection');
+				$autorecommenddata = getHotCollection(500);
+			}
+		}
+
+		savecache('collection_index', array('dateline' => TIMESTAMP, 'data' => $collectiondata, 'auto' => $autorecommenddata));
+		$collectiondata = array('data' => $collectiondata, 'auto' => $autorecommenddata);
+	} else {
+		$collectiondata = &$_G['cache']['collection_index'];
+	}
+	if($_G['setting']['showfollowcollection']) {
+		$followcollections = $_G['uid'] ? C::t('forum_collectionfollow')->fetch_all_by_uid($_G['uid']) : array();;
+		if($followcollections) {
+			$collectiondata['follows'] = C::t('forum_collection')->fetch_all(array_keys($followcollections), 'dateline', 'DESC', 0, $_G['setting']['showfollowcollection']);
+		}
+	}
+	if($collectionrecommend['autorecommend'] && $collectiondata['auto']) {
+		$randrecommend = array_rand($collectiondata['auto'], min($collectionrecommend['autorecommend'], count($collectiondata['auto'])));
+		if($randrecommend && !is_array($randrecommend)) {
+			$collectiondata['data'][$randrecommend] = $collectiondata['auto'][$randrecommend];
+		} else {
+			foreach($randrecommend as $ctid) {
+				$collectiondata['data'][$ctid] = $collectiondata['auto'][$ctid];
+			}
+		}
+	}
+	if($collectiondata['data']) {
+		$collectiondata['data'] = array_slice($collectiondata['data'], 0, $collectionrecommend['autorecommend'], true);
+	}
+
 }
 
 if(empty($gid) && empty($_G['member']['accessmasks']) && empty($showoldetails)) {
@@ -64,27 +136,108 @@ if(empty($gid) && empty($_G['member']['accessmasks']) && empty($showoldetails)) 
 	}
 }
 
+$grids = array();
+if($_G['setting']['grid']['showgrid']) {
+	loadcache('grids');
+	$cachelife = $_G['setting']['grid']['cachelife'] ? $_G['setting']['grid']['cachelife'] : 600;
+	$now = dgmdate(TIMESTAMP, lang('form/misc', 'y_m_d')).' '.lang('forum/misc', 'week_'.dgmdate(TIMESTAMP, 'w'));
+	if(TIMESTAMP - $_G['cache']['grids']['cachetime'] < $cachelife) {
+		$grids = $_G['cache']['grids'];
+	} else {
+		$images = array();
+		$_G['setting']['grid']['fids'] = in_array(0, $_G['setting']['grid']['fids']) ? 0 : $_G['setting']['grid']['fids'];
+
+		if($_G['setting']['grid']['gridtype']) {
+			$grids['digest'] = C::t('forum_thread')->fetch_all_for_guide('digest', 0, array(), 3, 0, 0, 10, $_G['setting']['grid']['fids']);
+		} else {
+			$images = C::t('forum_threadimage')->fetch_all_order_by_tid(10);
+			foreach($images as $key => $value) {
+				$tids[$value['tid']] = $value['tid'];
+			}
+			$grids['image'] = C::t('forum_thread')->fetch_all_by_tid($tids);
+		}
+		$grids['newthread'] = C::t('forum_thread')->fetch_all_for_guide('newthread', 0, array(), 0, 0, 0, 10, $_G['setting']['grid']['fids']);
+
+		$grids['newreply'] = C::t('forum_thread')->fetch_all_for_guide('reply', 0, array(), 0, 0, 0, 10, $_G['setting']['grid']['fids']);
+		$grids['hot'] = C::t('forum_thread')->fetch_all_for_guide('hot', 0, array(), 3, 0, 0, 10, $_G['setting']['grid']['fids']);
+
+		$_G['forum_colorarray'] = array('', '#EE1B2E', '#EE5023', '#996600', '#3C9D40', '#2897C5', '#2B65B7', '#8F2A90', '#EC1282');
+		foreach($grids as $type => $gridthreads) {
+			foreach($gridthreads as $key => $gridthread) {
+				$gridthread['dateline'] = str_replace('"', '\'', dgmdate($gridthread['dateline'], 'u', '9999', getglobal('setting/dateformat')));
+				$gridthread['lastpost'] = str_replace('"', '\'', dgmdate($gridthread['lastpost'], 'u', '9999', getglobal('setting/dateformat')));
+				if($gridthread['highlight'] && $_G['setting']['grid']['highlight']) {
+					$string = sprintf('%02d', $gridthread['highlight']);
+					$stylestr = sprintf('%03b', $string[0]);
+
+					$gridthread['highlight'] = ' style="';
+					$gridthread['highlight'] .= $stylestr[0] ? 'font-weight: bold;' : '';
+					$gridthread['highlight'] .= $stylestr[1] ? 'font-style: italic;' : '';
+					$gridthread['highlight'] .= $stylestr[2] ? 'text-decoration: underline;' : '';
+					$gridthread['highlight'] .= $string[1] ? 'color: '.$_G['forum_colorarray'][$string[1]] : '';
+					$gridthread['highlight'] .= '"';
+				} else {
+					$gridthread['highlight'] = '';
+				}
+				if($_G['setting']['grid']['textleng']) {
+					$gridthread['oldsubject'] = dhtmlspecialchars($gridthread['subject']);
+					$gridthread['subject'] = cutstr($gridthread['subject'], $_G['setting']['grid']['textleng']);
+				}
+
+				$grids[$type][$key] = $gridthread;
+			}
+		}
+		if(!$_G['setting']['grid']['gridtype']) {
+
+			$focuspic = $focusurl = $focustext = array();
+			$grids['focus'] = 'config=5|0xffffff|0x0099ff|50|0xffffff|0x0099ff|0x000000';
+			foreach($grids['image'] as $ithread) {
+				if($ithread['displayorder'] < 0) {
+					continue;
+				}
+				if($images[$ithread['tid']]['remote']) {
+					$imageurl = $_G['setting']['ftp']['attachurl'].'forum/'.$images[$ithread['tid']]['attachment'];
+				} else {
+					$imageurl = $_G['setting']['attachurl'].'forum/'.$images[$ithread['tid']]['attachment'];
+				}
+				$grids['slide'][$ithread['tid']] = array(
+						'image' => $imageurl,
+						'url' => 'forum.php?mod=viewthread&tid='.$ithread['tid'],
+						'subject' => $ithread['subject']
+					);
+			}
+		}
+		$grids['cachetime'] = TIMESTAMP;
+		savecache('grids', $grids);
+	}
+}
+
 if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 	$announcements = get_index_announcements();
 
-	$sql = !empty($_G['member']['accessmasks']) ?
-		"SELECT f.fid, f.fup, f.type, f.name, f.threads, f.posts, f.todayposts, f.lastpost, f.inheritedmod, f.domain,
-			f.forumcolumns, f.simple, ff.description, ff.moderators, ff.icon, ff.viewperm, ff.redirect, ff.extra, a.allowview
-			FROM ".DB::table('forum_forum')." f
-			LEFT JOIN ".DB::table('forum_forumfield')." ff ON ff.fid=f.fid
-			LEFT JOIN ".DB::table('forum_access')." a ON a.uid='$_G[uid]' AND a.fid=f.fid
-			WHERE f.status='1' ORDER BY f.type, f.displayorder"
-		: "SELECT f.fid, f.fup, f.type, f.name, f.threads, f.posts, f.todayposts, f.lastpost, f.inheritedmod, f.domain,
-			f.forumcolumns, f.simple, ff.description, ff.moderators, ff.icon, ff.viewperm, ff.redirect, ff.extra
-			FROM ".DB::table('forum_forum')." f
-			LEFT JOIN ".DB::table('forum_forumfield')." ff USING(fid)
-			WHERE f.status='1' ORDER BY f.type, f.displayorder";
 
-	$query = DB::query($sql);
+	$forums = C::t('forum_forum')->fetch_all_by_status(1);
+	$fids = array();
+	foreach($forums as $forum) {
+		$fids[$forum['fid']] = $forum['fid'];
+	}
 
-	while($forum = DB::fetch($query)) {
+	$forum_access = array();
+	if(!empty($_G['member']['accessmasks'])) {
+		$forum_access = C::t('forum_access')->fetch_all_by_fid_uid($fids, $_G['uid']);
+	}
+
+	$forum_fields = C::t('forum_forumfield')->fetch_all($fids);
+
+	foreach($forums as $forum) {
+		if($forum_fields[$forum['fid']]['fid']) {
+			$forum = array_merge($forum, $forum_fields[$forum['fid']]);
+		}
+		if($forum_access['fid']) {
+			$forum = array_merge($forum, $forum_access[$forum['fid']]);
+		}
 		$forumname[$forum['fid']] = strip_tags($forum['name']);
-		$forum['extra'] = unserialize($forum['extra']);
+		$forum['extra'] = empty($forum['extra']) ? array() : dunserialize($forum['extra']);
 		if(!is_array($forum['extra'])) {
 			$forum['extra'] = array();
 		}
@@ -124,6 +277,7 @@ if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 
 		}
 	}
+	unset($forum_access, $forum_fields);
 
 	foreach($catlist as $catid => $category) {
 		$catlist[$catid]['collapseimg'] = 'collapsed_no.gif';
@@ -132,7 +286,7 @@ if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 			$catlist[$catid]['endrows'] = '';
 			if($colspan = $category['forumscount'] % $category['forumcolumns']) {
 				while(($category['forumcolumns'] - $colspan) > 0) {
-					$catlist[$catid]['endrows'] .= '<td>&nbsp;</td>';
+					$catlist[$catid]['endrows'] .= '<td width="'.$catlist[$catid]['forumcolwidth'].'">&nbsp;</td>';
 					$colspan ++;
 				}
 				$catlist[$catid]['endrows'] .= '</tr>';
@@ -157,11 +311,11 @@ if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 
 		$onlineinfo = explode("\t", $_G['cache']['onlinerecord']);
 		if(empty($_G['cookie']['onlineusernum'])) {
-			$onlinenum = DB::result_first("SELECT count(*) FROM ".DB::table('common_session'));
+			$onlinenum = C::app()->session->count();
 			if($onlinenum > $onlineinfo[0]) {
 				$onlinerecord = "$onlinenum\t".TIMESTAMP;
-				DB::query("UPDATE ".DB::table('common_setting')." SET svalue='$onlinerecord' WHERE skey='onlinerecord'");
-				save_syscache('onlinerecord', $onlinerecord);
+				C::t('common_setting')->update('onlinerecord', $onlinerecord);
+				savecache('onlinerecord', $onlinerecord);
 				$onlineinfo = array($onlinenum, TIMESTAMP);
 			}
 			dsetcookie('onlineusernum', intval($onlinenum), 300);
@@ -172,16 +326,21 @@ if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 
 		$detailstatus = $showoldetails == 'yes' || (((!isset($_G['cookie']['onlineindex']) && !$_G['setting']['whosonline_contract']) || $_G['cookie']['onlineindex']) && $onlinenum < 500 && !$showoldetails);
 
+		$guestcount = $membercount = 0;
+		if(!empty($_G['setting']['sessionclose'])) {
+			$detailstatus = false;
+			$membercount = C::app()->session->count(1);
+			$guestcount = $onlinenum - $membercount;
+		}
+
 		if($detailstatus) {
 			$actioncode = lang('action');
 
 			$_G['uid'] && updatesession();
-			$membercount = $invisiblecount = 0;
 			$whosonline = array();
 
 			$_G['setting']['maxonlinelist'] = $_G['setting']['maxonlinelist'] ? $_G['setting']['maxonlinelist'] : 500;
-			$query = DB::query("SELECT uid, username, groupid, invisible, lastactivity, fid FROM ".DB::table('common_session')." WHERE uid>'0' LIMIT ".$_G['setting']['maxonlinelist']);
-			while($online = DB::fetch($query)) {
+			foreach(C::app()->session->fetch_member(1, 0, $_G['setting']['maxonlinelist']) as $online){
 				$membercount ++;
 				if($online['invisible']) {
 					$invisiblecount++;
@@ -193,8 +352,7 @@ if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 				$whosonline[] = $online;
 			}
 			if(isset($_G['cache']['onlinelist'][7]) && $_G['setting']['maxonlinelist'] > $membercount) {
-				$query = DB::query("SELECT uid, username, groupid, invisible, lastactivity, fid FROM ".DB::table('common_session')." WHERE uid='0' ORDER BY uid DESC LIMIT ".($_G['setting']['maxonlinelist'] - $membercount));
-				while($online = DB::fetch($query)) {
+				foreach(C::app()->session->fetch_member(2, 0, $_G['setting']['maxonlinelist'] - $membercount) as $online){
 					$online['icon'] = $_G['cache']['onlinelist'][7];
 					$online['username'] = $_G['cache']['onlinelist']['guest'];
 					$online['lastactivity'] = dgmdate($online['lastactivity'], 't');
@@ -204,19 +362,18 @@ if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 			unset($actioncode, $online);
 
 			if($onlinenum > $_G['setting']['maxonlinelist']) {
-				$membercount = $discuz->session->onlinecount(1);
-				$invisiblecount = DB::result_first("SELECT COUNT(*) FROM ".DB::table('common_session')." WHERE invisible = '1'");
+				$membercount = C::app()->session->count(1);
+				$invisiblecount = C::app()->session->count_invisible();
 			}
 
 			if($onlinenum < $membercount) {
-				$onlinenum = $discuz->session->onlinecount(0);
+				$onlinenum = C::app()->session->count();
 				dsetcookie('onlineusernum', intval($onlinenum), 300);
 			}
 
+			$invisiblecount = intval($invisiblecount);
 			$guestcount = $onlinenum - $membercount;
 
-			$db = DB::object();
-			$db->free_result($query);
 			unset($online);
 		}
 
@@ -234,19 +391,19 @@ if(!$gid && (!defined('FORUM_INDEX_PAGE_MEMORY') || !FORUM_INDEX_PAGE_MEMORY)) {
 			'onlinenum' => $onlinenum,
 			'membercount' => $membercount,
 			'guestcount' => $guestcount,
+			'grids' => $grids,
 			'announcements' => $announcements,
 			'threads' => $threads,
 			'posts' => $posts,
 			'todayposts' => $todayposts,
 			'onlineinfo' => $onlineinfo,
-			'announcepm' => $announcepm), getglobal('setting/memory/forumindex/ttl'));
+			'announcepm' => $announcepm), getglobal('setting/memory/forumindex'));
 	}
 
 } else {
 	require_once DISCUZ_ROOT.'./source/include/misc/misc_category.php';
 }
 
-$lastvisit = $lastvisit ? dgmdate($lastvisit, 'u') : 0;
 
 if(defined('IN_ARCHIVER')) {
 	include loadarchiver('forum/discuz');
@@ -314,8 +471,8 @@ function get_index_page_guest_cache() {
 }
 
 function get_index_memory_by_groupid($key) {
-	$enable = getglobal('setting/memory/forumindex/enable');
-	if($enable && memory('check')) {
+	$enable = getglobal('setting/memory/forumindex');
+	if($enable !== null && memory('check')) {
 		if(IS_ROBOT) {
 			$key = 'for_robot';
 		}
@@ -359,6 +516,16 @@ function categorycollapse() {
 		} else {
 			$catlist[$fid]['collapseimg'] = 'collapsed_yes.gif';
 			$collapse['category_'.$fid] = 'display: none';
+		}
+	}
+
+	for($i = -2; $i <= 0; $i++) {
+		if(!isset($_G['cookie']['collapse']) || strpos($_G['cookie']['collapse'], '_category_'.$i.'_') === FALSE) {
+			$collapse['collapseimg_'.$i] = 'collapsed_no.gif';
+			$collapse['category_'.$i] = '';
+		} else {
+			$collapse['collapseimg_'.$i] = 'collapsed_yes.gif';
+			$collapse['category_'.$i] = 'display: none';
 		}
 	}
 }

@@ -10,7 +10,7 @@
 			<ul>
 				<!--{loop $articlelist $article}-->
 				<li class="pbw">
-					<h3 class="xs3"><a href="portal.php?mod=view&aid=$article[aid]" target="_blank">$article[title]</a></h3>
+					<h3 class="xs3"><a href="{echo fetch_article_url($article);}" target="_blank">$article[title]</a></h3>
 					<p class="xg1">$article[commentnum] {lang a_comment} - $article[viewnum] {lang a_visit}</p>
 					<p>$article[summary]</p>
 					<p>

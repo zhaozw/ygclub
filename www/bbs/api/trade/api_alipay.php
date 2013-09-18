@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: api_alipay.php 30095 2012-05-10 06:36:49Z zhengqingpeng $
+ *      $Id: api_alipay.php 31606 2012-09-13 07:26:35Z monkey $
  */
 
 define('IN_API', true);
@@ -31,7 +31,7 @@ function credit_payurl($price, &$orderid) {
 
 	$args = array(
 		'subject' 		=> $_G['setting']['bbname'].' - '.$_G['member']['username'].' - '.lang('forum/misc', 'credit_payment'),
-		'body' 			=> lang('forum/misc', 'credit_forum_payment').' '.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['title'].' '.intval($price * $_G['setting']['ec_ratio']).' '.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['unit'].' ('.$_G['clientip'].')',
+		'body' 			=> lang('forum/misc', 'credit_forum_payment').' '.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['title'].' '.intval($price * $_G['setting']['ec_ratio']).' '.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['unit'],
 		'service' 		=> 'trade_create_by_buyer',
 		'partner' 		=> DISCUZ_PARTNER,
 		'notify_url' 		=> $_G['siteurl'].'api/trade/notify_credit.php',
@@ -63,7 +63,7 @@ function invite_payurl($amount, $price, &$orderid) {
 
 	$args = array(
 		'subject' 		=> $_G['setting']['bbname'].' - '.lang('forum/misc', 'invite_payment'),
-		'body' 			=> lang('forum/misc', 'invite_forum_payment').'_'.intval($amount).'_'.lang('forum/misc', 'invite_forum_payment_unit').'_('.$_G['clientip'].')',
+		'body' 			=> lang('forum/misc', 'invite_forum_payment').' '.intval($amount).' '.lang('forum/misc', 'invite_forum_payment_unit'),
 		'service' 		=> 'trade_create_by_buyer',
 		'partner' 		=> DISCUZ_PARTNER,
 		'notify_url' 		=> $_G['siteurl'].'api/trade/notify_invite.php',
@@ -157,8 +157,7 @@ function trade_notifycheck($type) {
 	if($type == 'trade') {
 		$urlstr = '';
 		foreach($notify as $key => $val) {
-			MAGIC_QUOTES_GPC && $val = stripslashes($val);
-			$urlstr .= $key.'='.rawurlencode(stripslashes($val)).'&';
+			$urlstr .= $key.'='.rawurlencode($val).'&';
 		}
 	} else {
 		if(!DISCUZ_SECURITYCODE) {
@@ -167,7 +166,6 @@ function trade_notifycheck($type) {
 		ksort($notify);
 		$sign = '';
 		foreach($notify as $key => $val) {
-			$val = stripslashes($val);
 			if($key != 'sign' && $key != 'sign_type') $sign .= "&$key=$val";
 		}
 		if($notify['sign'] != md5(substr($sign,1).DISCUZ_SECURITYCODE)) {
@@ -211,7 +209,7 @@ function trade_typestatus($method, $status = -1) {
 		case 'unstarttrades'	: $methodvalue = array(0);break;
 		case 'eccredittrades'	: $methodvalue = array(7, 17);break;
 	}
-	return $status != -1 ? in_array($status, $methodvalue) : implode('\',\'', $methodvalue);
+	return $status != -1 ? in_array($status, $methodvalue) : $methodvalue;
 }
 
 function trade_getstatus($key, $method = 2) {

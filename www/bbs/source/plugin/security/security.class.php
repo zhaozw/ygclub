@@ -4,7 +4,7 @@
  *		[Discuz! X] (C)2001-2099 Comsenz Inc.
  *		This is NOT a freeware, use is subject to license terms
  *
- *		$Id: security.class.php 30420 2012-05-28 05:41:22Z songlixin $
+ *		$Id: security.class.php 33393 2013-06-06 02:24:06Z jeffjzhang $
  */
 
 
@@ -13,137 +13,257 @@ if(!defined('IN_DISCUZ')) {
 }
 
 class plugin_security {
-	var $debug = 0;
-	var $_secStatus;
-	var $postReportAction = array('post_newthread_succeed', 'post_edit_succeed', 'post_reply_succeed',
+	const DEBUG = 0;
+	protected static $postReportAction = array('post_newthread_succeed', 'post_edit_succeed', 'post_reply_succeed',
 							'post_newthread_mod_succeed', 'post_newthread_mod_succeed', 'post_reply_mod_succeed',
 							'edit_reply_mod_succeed', 'edit_newthread_mod_succeed');
-	var $userReportAction = array('login_succeed', 'register_succeed', 'location_login_succeed_mobile',
+	protected static $userReportAction = array('login_succeed', 'register_succeed', 'location_login_succeed_mobile',
 							'location_login_succeed', 'register_succeed_location', 'register_email_verify',
 							'register_manual_verify', 'login_succeed_inactive_member');
-	var $hookMoudle = array('post', 'logging', 'register');
-	var $isAdminGroup = 0;
+	protected static $hookMoudle = array('post', 'logging', 'register');
+	protected static $isAdminGroup = 0;
+	protected static $cloudAppService;
+	protected static $securityService;
+	protected static $securityStatus;
 
-	function __construct() {
-		require_once libfile('function/cloud');
-		$this->_secStatus = getcloudappstatus('security');
+	public function __construct() {
+		self::$cloudAppService = Cloud::loadClass('Service_App');
+		self::$securityStatus = self::$cloudAppService->getCloudAppStatus('security');
+		self::$securityService = Cloud::loadClass('Service_Security');
 	}
 
-	function common(){
+	public function common() {
 		global $_G;
-		if (!$this->_secStatus) {
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
-		if ($_G['uid'] && $_G['gp_mod'] != 'initsys') {
-			$lastCookieReportTime = $this->_decodeReportTime($_G['cookie']['cookiereport']);
+		if ($_G['uid']) {
+			$lastCookieReportTime = $this->_decodeReportTime($_G['cookie']['security_cookiereport']);
 			if ($lastCookieReportTime < strtotime('today')) {
 				$this->_reportLoginUser(array('uid' => $_G['uid']));
 			}
 		}
 
 		if ($_G['adminid'] > 0) {
-			$this->isAdminGroup = 1;
+			self::$isAdminGroup = 1;
+		}
+
+		if($_G['setting']['connect']['allow'] && $_G['setting']['security_qqlogin_alone']) {
+			$_G['setting']['regstatus'] = 0;
+			$_G['setting']['regconnect'] = 1;
+		}
+
+		if($_G['setting']['connect']['allow'] && $_G['setting']['security_safelogin'] && ((!$_G['uid'] && $_G['connectguest']) || $_G['uid'] && !$_G['member']['conisbind']) && CURMODULE == 'post') {
+			$msg = '<p>'.lang('plugin/security', 'safelogintips').'</p><p class="mtm"><a href="connect.php?mod=config" target="_blank"><img src="'.IMGDIR.'/qq_bind_small.gif" class="qq_bind" align="absmiddle" /></a></p>';
+			if($_G['inajax']) {
+				if(!$_GET['ajaxtarget']) {
+					$_GET['handlekey'] = 'safelogin';
+				}
+				if(!$_G['uid'] && $_G['connectguest']) {
+					showmessage('qqconnect:connectguest_message_complete_or_bind');
+				} else {
+					showmessage($msg, 'connect.php?mod=config', array(), array('alert' => 'info', 'showdialog' => true, 'striptags' => false, 'locationtime' => 0));
+				}
+			} else {
+				if(!$_G['uid'] && $_G['connectguest']) {
+					dheader('location: '.$_G['siteurl'].'member.php?mod=connect&ac=bind');
+				} else {
+					showmessage($msg, '', array(), array('alert' => 'info', 'showdialog' => true, 'msgtype' => 2, 'striptags' => false));
+				}
+			}
+		}
+
+		if($_G['setting']['connect']['allow'] && $_G['setting']['security_qqlogin_alone'] && CURMODULE == 'logging' && $_GET['action'] == 'login' && submitcheck('loginsubmit', 1)) {
+			showmessage('security:qqloginaloneopened');
 		}
 
 		return true;
 	}
 
-	function global_footer() {
-		global $_G;
-		if (!$this->_secStatus) {
+	public function global_footer() {
+		global $_G, $_GET;
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
+
 		$formhash = formhash();
-		$ajaxReportScript = '';
-		$processName = 'securitOperate';
-		if ($this->isAdminGroup && !discuz_process::islocked($processName, 10)) {
-			$ajaxReportScript = <<<EOF
-			<script type='text/javascript'>
-			var url = SITEURL + '/plugin.php?id=security:sitemaster';
-			var x = new Ajax();
-			x.post(url, 'formhash=$formhash', function(s){});
-			</script>
+		if ($_G['adminid']) {
+			$processName = 'securityOperate';
+			if (self::$isAdminGroup && !discuz_process::islocked($processName, 30)) {
+				$ajaxReportScript = <<<EOF
+					<script type='text/javascript'>
+					var url = SITEURL + '/plugin.php?id=security:sitemaster';
+					var x = new Ajax();
+					x.post(url, 'formhash=$formhash', function(s){});
+					</script>
 EOF;
+			}
 		}
 
-		$processName = 'securitRetry';
-		$time = 5;
-		if ($_G['gp_d']) {
-			$time = 1;
-		}
+		$processName = 'securityRetry';
+		$time = 10;
 		if (!discuz_process::islocked($processName, $time)) {
-			$ajaxRetryScript = <<<EOF
-			<script type='text/javascript'>
-			var urlRetry = SITEURL + '/plugin.php?id=security:job';
-			var ajaxRetry = new Ajax();
-			ajaxRetry.post(urlRetry, 'formhash=$formhash', function(s){});
-			</script>
+			if (C::t('#security#security_failedlog')->count()) {
+				$ajaxRetryScript = <<<EOF
+					<script type='text/javascript'>
+					var urlRetry = SITEURL + '/plugin.php?id=security:job';
+					var ajaxRetry = new Ajax();
+					ajaxRetry.post(urlRetry, 'formhash=$formhash', function(s){});
+					</script>
 EOF;
+			}
 		}
-		return $ajaxReportScript . $ajaxRetryScript;
+
+		if($_G['setting']['connect']['allow'] && !$_G['uid'] && $_G['setting']['security_qqlogin_alone']) {
+			$loginboxdisappear = <<<EOF
+				<script type="text/javascript">
+				if($('lsform')) {
+					var divs = $('lsform').getElementsByTagName('div');
+					for(i in divs) {
+						if(divs[i] && divs[i].className == 'y pns') {
+							divs[i].style.display = 'none';
+						}
+						if(divs[i] && divs[i].className == 'fastlg_fm y') {
+							divs[i].style.borderWidth = '0px';
+						}
+					}
+				}
+				</script>
+EOF;
+			if(!(CURMODULE == 'connect' && $_G['connectguest'])) {
+				$_G['connect']['referer'] = !$_G['inajax'] && CURSCRIPT != 'member' ? $_G['basefilename'].($_SERVER['QUERY_STRING'] ? '?'.$_SERVER['QUERY_STRING'] : '') : dreferer();
+				$_G['connect']['login_url'] = $_G['siteurl'].'connect.php?mod=login&op=init&referer='.urlencode($_G['connect']['referer'] ? $_G['connect']['referer'] : 'index.php');
+				$loginstr = '<div class="rfm bw0"><table><tr><th>'.lang('plugin/security', 'quicklogin').': </th><td><a href="'.$_G['connect']['login_url'].'&statfrom=login" target="_top" rel="nofollow"><img src="'.IMGDIR.'/qq_login.gif" class="vm" /></a></td></tr></table></div>';
+				$loginboxdisappear .= <<<EOF
+				<script type="text/javascript">
+				var loginform = document.getElementsByTagName('form');
+				if(loginform) {
+					for(i in loginform) {
+						if(loginform[i].id && loginform[i].id.substr(0, 11) == 'loginform_L') {
+							loginform[i].innerHTML = '$loginstr';
+						}
+					}
+				}
+				</script>
+EOF;
+			}
+		}
+		if($_G['setting']['connect']['allow'] && $_G['uid'] && $_G['setting']['security_safelogin'] && !$_G['member']['conisbind'] && CURMODULE != 'post' && getcookie('safelogintips')) {
+			$msg = '<p>'.lang('plugin/security', 'safelogintips').'</p><p class="mtm"><a href="connect.php?mod=config" target="_blank"><img src="'.IMGDIR.'/qq_bind_small.gif" class="qq_bind" align="absmiddle" /></a></p>';
+			$safelogintips = <<<EOF
+				<script type="text/javascript">
+				hideWindow('safelogintips');
+				showDialog('$msg', 'notice', null, '(function() { window.location.href="connect.php?mod=config"; })();', 0, null, null, null, null, null, null);
+				</script>
+EOF;
+			dsetcookie('safelogintips');
+		}
+
+		return $ajaxReportScript . $ajaxRetryScript . $loginboxdisappear . $safelogintips;
 	}
 
 	function global_footerlink() {
-		return '&nbsp;<a href="http://discuz.qq.com/service/security" target="_blank" title="'.lang('plugin/security', 'title').'"><img src="static/image/common/security.png"></a>&nbsp;';
+		return '&nbsp;<a href="http://discuz.qq.com/service/security" target="_blank" title="'.lang('plugin/security', 'title').'"><img src="static/image/common/security.png"></a>';
 	}
 
-	function deletepost($param) {
-		global $_G;
-		if (!$this->_secStatus) {
+	public function deletepost($param) {
+		global $_G, $_POST;
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
+
 		$step = $param['step'];
 		$param = $param['param'];
 		$ids = $param[0];
 		$idType = $param[1];
+		$recycle = $param[4];
 
-
-		if ($_G['gp_formhash'] && $step == 'check' && $idType == 'pid') {
-			require_once libfile('function/sec');
-			updatePostOperate($ids, 2);
-			if ($_G['gp_module'] == 'security' && $_G['gp_method'] == 'setEvilPost') {
+		if ($step == 'check' && $idType == 'pid') {
+			self::$securityService->updatePostOperate($ids, 'delete');
+			if ($_POST['module'] == 'security' && $_POST['method'] == 'setEvilPost') {
 				return true;
 			}
-			logDeletePost($ids, $_G['gp_reason']);
+			self::$securityService->logDeletePost($ids, $_POST['reason']);
 		}
+
 		return true;
 	}
 
-	function deletethread($param) {
-		global $_G;
-		if (!$this->_secStatus) {
+	public function deletethread($param) {
+		global $_G, $_POST;
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
+
 		$step = $param['step'];
 		$param = $param['param'];
 		$ids = $param[0];
 
-		if ($_G['gp_formhash'] && $step == 'check') {
-			require_once libfile('function/sec');
-			updateThreadOperate($ids, 2);
-			if ($_G['gp_module'] == 'security' && $_G['gp_method'] == 'setEvilPost') {
+		if ($step == 'check') {
+			self::$securityService->updateThreadOperate($ids, 'delete');
+			if ($_POST['module'] == 'security' && $_POST['method'] == 'setEvilPost') {
 				return true;
 			}
-			logDeleteThread($ids, $_G['gp_reason']);
+			self::$securityService->logDeleteThread($ids, $_POST['reason']);
 		}
+
 		return true;
 	}
 
+	public function savebanlog($param) {
+		global $_G, $_POST;
+		if (self::$securityStatus != TRUE) {
+			return false;
+		}
+		$param = $param['param'];
+		$username = $param[0];
+		$oldGid = $param[1];
+		$newGid = $param[2];
+		$reason = $param[4];
+		if ($_POST['formhash'] && $newGid >= 4 && $newGid < 10) {
+			self::$securityService->logBannedMember($username, $reason);
+		} else {
+			self::$securityService->updateMemberRecover($username);
+		}
+	}
 
-	function _decodeReportTime($time) {
+	public function undeletethreads($param) {
+		$tids = $param['param'][0];
+		if ($tids && is_array($tids)) {
+			self::$securityService->updateThreadOperate($tids, 'recover');
+		}
+	}
+
+	public function recyclebinpostundelete ($param) {
+		$pids = $param['param'][0];
+		if ($pids && is_array($pids)) {
+			self::$securityService->updatePostOperate($pids, 'recover');
+		}
+	}
+
+	public function deletemember($param) {
+		$uids = $param['param'][0];
+		$step = $param['step'];
+		if ($step == 'check' && $uids && is_array($uids)) {
+			self::$securityService->updateMemberOperate($uids, 'delete');
+		}
+	}
+
+	protected function _decodeReportTime($time) {
 		if (!$time) {
 			return 0;
 		}
 		return authcode($time);
 	}
-	function _encodeReportTime($time) {
+
+	protected function _encodeReportTime($time) {
 		if (!$time) {
 			return 0;
 		}
 		return authcode($time, 'ENCODE');
 	}
 
-	function _reportRegisterUser($param) {
+	protected function _reportRegisterUser($param) {
 		global $_G;
 		if (!$param['uid'] && !$_G['uid']) {
 			return false;
@@ -152,38 +272,36 @@ EOF;
 		}
 		$this->secLog('USERREG-UID', $param['uid']);
 
-		require_once libfile('class/sec');
-		$sec = Sec::getInstance();
-		$sec->reportRegister($param['uid']);
+		self::$securityService->reportRegister($param['uid']);
 		$this->_retryReport();
 	}
 
-	function _reportLoginUser($param) {
+	protected function _reportLoginUser($param) {
 		global $_G;
+
 		if (!$param['uid'] && !$_G['uid']) {
 			return false;
 		} else {
 			$param['uid'] = $_G['uid'];
 		}
 		$this->secLog('USERLOG-UID', $param['uid']);
-		require_once libfile('class/sec');
-		$sec = Sec::getInstance();
-		$sec->reportLogin($param['uid']);
+		self::$securityService->reportLogin($param['uid']);
 		$this->_retryReport();
-		dsetcookie('cookiereport', $this->_encodeReportTime($_G['timestamp']), '43200');
+		$cookieTime = 43200;
+		dsetcookie('security_cookiereport', $this->_encodeReportTime($_G['timestamp']), $cookieTime, 1);
 		return true;
 	}
 
-	function _reportMobileLoginUser($param) {
+	protected function _reportMobileLoginUser($param) {
 		if (!$param['username']) {
 			return false;
 		}
-		$username = addslashes($param['username']);
-		$result = DB::fetch_first("SELECT uid FROM " . DB::table('common_member') . " WHERE username = '$username'");
+		$username = $param['username'];
+		$result = C::t('common_member')->fetch_by_username($username);
 		return $this->_reportLoginUser($result);
 	}
 
-	function _reportNewThread($param) {
+	protected function _reportNewThread($param) {
 		global $_G;
 		if (!$param['pid'] || !$param['tid']) {
 			return false;
@@ -192,14 +310,12 @@ EOF;
 		$tid = $param['tid'];
 		$pid = $param['pid'];
 
-		require_once libfile('class/sec');
-		$sec = Sec::getInstance();
-		$sec->reportNewThread($tid, $pid);
+		self::$securityService->reportPost('new', $tid, $pid, $extra, $param['isFollow']);
 		$this->_retryReport();
 		return true;
 	}
 
-	function _reportNewPost($param) {
+	protected function _reportNewPost($param) {
 		global $_G;
 		if (!$param['pid'] || !$param['tid']) {
 			return false;
@@ -208,14 +324,12 @@ EOF;
 		$tid = $param['tid'];
 		$pid = $param['pid'];
 
-		require_once libfile('class/sec');
-		$sec = Sec::getInstance();
-		$sec->reportNewPost($tid, $pid);
+		self::$securityService->reportPost('new', $tid, $pid, $extra, $param['isFollow']);
 		$this->_retryReport();
 		return true;
 	}
 
-	function _reportEditPost($param) {
+	protected function _reportEditPost($param) {
 		global $_G;
 		if (!$param['pid'] || !$param['tid']) {
 			return false;
@@ -224,49 +338,46 @@ EOF;
 		$tid = $param['tid'];
 		$pid = $param['pid'];
 
-		require_once libfile('class/sec');
-		$sec = Sec::getInstance();
-		$sec->reportEditPost($tid, $pid);
+		self::$securityService->reportPost('edit', $tid, $pid, $extra, $param['isFollow']);
 		$this->_retryReport();
 		return true;
 	}
 
-	function _retryReport() {
-		require_once libfile('class/sec');
-		$sec = Sec::getInstance();
-		$sec->retryReportData();
+	protected function _retryReport() {
+		return self::$securityService->retryReportData();
 	}
 
-	function secLog($type, $data) {
+	public function secLog($type, $data) {
 		global $_G;
-		if (!$this->debug) {
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
-		$date = date("Y-m-d", $_G['timestamp']);
-		$logfile = DISCUZ_ROOT."/data/EVIL" . $type . '-' . $date . ".log";
-		$data = date("Y-m-d H:i:s", $_G['timestamp']) . "\t" . json_encode($data) . "\r\n";
-		@file_put_contents($logfile, $data, FILE_APPEND);
+
+		if (!self::DEBUG) {
+			return false;
+		}
 	}
 
-	function getMergeAction() {
-		return array_merge($this->postReportAction, $this->userReportAction);
+	public function getMergeAction() {
+		return array_merge(self::$postReportAction, self::$userReportAction);
 	}
 }
 
 class plugin_security_forum extends plugin_security {
 
-	function post_security(){
-		global $_G;
+	public function post_security(){
+		return true;
 	}
 
-	function post_report_message($param) {
-		if (!$this->_secStatus) {
+	public function post_report_message($param) {
+		global $_G, $extra, $redirecturl;
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
-		global $_G, $extra, $redirecturl;
+
 		$param['message'] = $param['param'][0];
 		$param['values'] = $param['param'][2];
-		if (in_array($param['message'], $this->postReportAction)) {
+		if (in_array($param['message'], self::$postReportAction)) {
 			switch ($param['message']) {
 				case 'post_newthread_succeed':
 				case 'post_newthread_mod_succeed':
@@ -287,16 +398,53 @@ class plugin_security_forum extends plugin_security {
 }
 
 class plugin_security_group extends plugin_security_forum {}
+class plugin_security_home extends plugin_security_forum {
+
+	public function spacecp_follow_report_message($param) {
+		global $_G, $extra, $redirecturl;
+		if (self::$securityStatus != TRUE) {
+			return false;
+		}
+
+		$param['message'] = $param['param'][0];
+		$param['values'] = $param['param'][2];
+		$param['values']['isFollow'] = 1;
+		if (in_array($param['message'], self::$postReportAction)) {
+			switch ($param['message']) {
+				case 'post_newthread_succeed':
+				case 'post_newthread_mod_succeed':
+					$this->_reportNewThread($param['values']);
+					break;
+				case 'post_edit_succeed':
+				case 'edit_reply_mod_succeed':
+				case 'edit_newthread_mod_succeed':
+					$this->_reportEditPost($param['values']);
+					break;
+				case 'post_reply_succeed':
+				case 'post_reply_mod_succeed':
+					$this->_reportNewPost($param['values']);
+				default:break;
+			}
+		}
+	}
+}
 
 class plugin_security_member extends plugin_security {
 
-	function logging_report_message($param) {
-		if (!$this->_secStatus) {
+	public function logging_report_message($param) {
+		global $_G;
+
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
+
+		if($_G['setting']['connect']['allow'] && $param['param'][0] == 'login_succeed' && $_G['setting']['security_safelogin'] && !$_G['member']['conisbind']) {
+			dsetcookie('safelogintips', 1);
+		}
+
 		$param['message'] = $param['param'][0];
 		$param['values'] = $param['param'][2];
-		if (in_array($param['message'], $this->userReportAction)) {
+		if (in_array($param['message'], self::$userReportAction)) {
 			if (!$param['values']['uid']) {
 				$this->_reportLoginUser($param['values']);
 			} else {
@@ -305,25 +453,50 @@ class plugin_security_member extends plugin_security {
 		}
 	}
 
-	function register_report_message($param) {
-		if (!$this->_secStatus) {
+	public function logging_method_output($param) {
+		global $_G;
+		if($_G['setting']['connect']['allow'] && !$_G['uid'] && $_G['setting']['security_qqlogin_alone'] && $_GET['action'] == 'login' && $_GET['infloat'] == 'yes') {
+			$_G['connect']['referer'] = !$_G['inajax'] && CURSCRIPT != 'member' ? $_G['basefilename'].($_SERVER['QUERY_STRING'] ? '?'.$_SERVER['QUERY_STRING'] : '') : dreferer();
+			$_G['connect']['login_url'] = $_G['siteurl'].'connect.php?mod=login&op=init&referer='.urlencode($_G['connect']['referer'] ? $_G['connect']['referer'] : 'index.php');
+			$loginstr = '<div class="rfm bw0"><table><tr><th>'.lang('plugin/security', 'quicklogin').': </th><td><a href="'.$_G['connect']['login_url'].'&statfrom=login" target="_top" rel="nofollow"><img src="'.IMGDIR.'/qq_login.gif" class="vm" /></a></td></tr></table></div>';
+			$loginboxdisappear = <<<EOF
+				<script type="text/javascript">
+				var loginform = document.getElementsByTagName('form');
+				if(loginform) {
+					for(i in loginform) {
+						if(loginform[i].id && loginform[i].id.substr(0, 11) == 'loginform_L') {
+							loginform[i].innerHTML = '$loginstr';
+						}
+					}
+				}
+				</script>
+EOF;
+		}
+		return $loginboxdisappear;
+	}
+
+	public function register_report_message($param) {
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
+
 		$param['message'] = $param['param'][0];
 		$param['values'] = $param['param'][2];
-		if (in_array($param['message'], $this->userReportAction)) {
+
+		if (in_array($param['message'], self::$userReportAction)) {
 			$this->_reportRegisterUser($param['values']);
 		}
 	}
-	function connect_report_message($param) {
-		if (!$this->_secStatus) {
+	public function connect_report_message($param) {
+		global $_G;
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
-		global $_G;
+
 		$param['message'] = $param['param'][0];
 		$param['values'] = $param['param'][2];
-		if (($_G['gp_regsubmit'] || $_G['gp_loginsubmit']) && $_G['gp_formhash']) {
-			if ($_G['gp_loginsubmit']) {
+		if (($_POST['regsubmit'] || $_POST['loginsubmit']) && $_POST['formhash']) {
+			if ($_POST['loginsubmit']) {
 				$this->_reportLoginUser($_G['member']);
 			} else {
 				$this->_reportRegisterUser($param['values']);
@@ -340,13 +513,14 @@ class mobileplugin_security_member extends plugin_security_member {}
 
 class plugin_security_connect extends plugin_security_member {
 
-	function login_report_message($param) {
-		if (!$this->_secStatus) {
+	public function login_report_message($param) {
+		if (self::$securityStatus != TRUE) {
 			return false;
 		}
+
 		$param['message'] = $param['param'][0];
 		$param['values'] = $param['param'][2];
-		if (in_array($param['message'], $this->userReportAction)) {
+		if (in_array($param['message'], self::$userReportAction)) {
 			switch ($param['message']) {
 				case login_succeed:
 				case location_login_succeed:

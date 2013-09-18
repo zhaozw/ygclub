@@ -1,7 +1,6 @@
-<!--{subtemplate common/header}-->
+<!--{template common/header}-->
 
 <div id="pt" class="bm cl">
-	<!--{subtemplate common/simplesearchform}-->
 	<div class="z">
 		<a href="./" class="nvhm" title="{lang homepage}">$_G[setting][bbname]</a> <em>&rsaquo;</em>
 		<a href="$_G[setting][navs][1][filename]">$_G[setting][navs][1][navname]</a> <em>&rsaquo;</em>
@@ -30,7 +29,7 @@
 			<!--{/if}-->
 			<div class="pgs cl mtm mbm">$multi</div>
 			<!--{if $csubject['allowcomment'] == 1}-->
-				<form name="cform" action="portal.php?mod=portalcp&ac=comment" method="post" autocomplete="off">
+				<form id="cform" name="cform" action="portal.php?mod=portalcp&ac=comment" method="post" autocomplete="off">
 					<div class="tedt">
 						<div class="area">
 							<textarea name="message" cols="60" rows="3" class="pt" id="message"></textarea>
@@ -59,4 +58,4 @@
 	<!--[diy=diy3]--><div id="diy3" class="area"></div><!--[/diy]-->
 </div>
 
-<!--{subtemplate common/footer}-->
+<!--{template common/footer}-->

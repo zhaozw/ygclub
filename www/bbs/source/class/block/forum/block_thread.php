@@ -4,13 +4,13 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: block_thread.php 11780 2010-06-13 02:11:52Z xupeng $
+ *      $Id: block_thread.php 32768 2013-03-07 09:40:05Z zhangguosheng $
  */
 
 if(!defined('IN_DISCUZ')) {
 	exit('Access Denied');
 }
-class block_thread {
+class block_thread extends discuz_block {
 	var $setting = array();
 
 	function block_thread(){
@@ -170,6 +170,7 @@ class block_thread {
 
 	function fields() {
 		return array(
+					'id' => array('name' => lang('blockclass', 'blockclass_field_id'), 'formtype' => 'text', 'datatype' => 'int'),
 					'url' => array('name' => lang('blockclass', 'blockclass_thread_field_url'), 'formtype' => 'text', 'datatype' => 'string'),
 					'title' => array('name' => lang('blockclass', 'blockclass_thread_field_title'), 'formtype' => 'title', 'datatype' => 'title'),
 					'pic' => array('name' => lang('blockclass', 'blockclass_thread_field_pic'), 'formtype' => 'pic', 'datatype' => 'pic'),
@@ -179,7 +180,6 @@ class block_thread {
 					'avatar' => array('name' => lang('blockclass', 'blockclass_thread_field_avatar'), 'formtype' => 'text', 'datatype' => 'string'),
 					'avatar_middle' => array('name' => lang('blockclass', 'blockclass_thread_field_avatar_middle'), 'formtype' => 'text', 'datatype' => 'string'),
 					'avatar_big' => array('name' => lang('blockclass', 'blockclass_thread_field_avatar_big'), 'formtype' => 'text', 'datatype' => 'string'),
-					'icon' => array('name' => lang('blockclass', 'blockclass_thread_field_icon'), 'formtype' => 'text', 'datatype' => 'string'),
 					'forumurl' => array('name' => lang('blockclass', 'blockclass_thread_field_forumurl'), 'formtype' => 'text', 'datatype' => 'string'),
 					'forumname' => array('name' => lang('blockclass', 'blockclass_thread_field_forumname'), 'formtype' => 'text', 'datatype' => 'string'),
 					'typename' => array('name' => lang('blockclass', 'blockclass_thread_field_typename'), 'formtype' => 'text', 'datatype' => 'string'),
@@ -242,10 +242,6 @@ class block_thread {
 		return $settings;
 	}
 
-	function cookparameter($parameter) {
-		return $parameter;
-	}
-
 	function getdata($style, $parameter) {
 		global $_G;
 
@@ -277,7 +273,7 @@ class block_thread {
 
 		$fids = array();
 		if(!empty($parameter['fids'])) {
-			if($parameter['fids'][0] == '0') {
+			if(isset($parameter['fids'][0]) && $parameter['fids'][0] == '0') {
 				unset($parameter['fids'][0]);
 			}
 			$fids = $parameter['fids'];
@@ -288,10 +284,24 @@ class block_thread {
 		require_once libfile('function/post');
 		require_once libfile('function/search');
 
-		$datalist = $list = $listtids = $pictids = $pics = $threadtids = array();
-		$threadtypeids = array();
+		$datalist = $list = $listtids = $pictids = $pics = $threadtids = $threadtypeids = $tagids = array();
 		$keyword = $keyword ? searchkey($keyword, "t.subject LIKE '%{text}%'") : '';
-		$tagkeyword = $tagkeyword ? searchkey($tagkeyword, "tim.tagname LIKE '%{text}%'") : '';
+		if($tagkeyword) {
+			if(!($tagids = DB::fetch_all('SELECT tagid FROM '.DB::table('common_tag').' WHERE 1'.searchkey($tagkeyword, "tagname LIKE '%{text}%'"), '', 'tagid'))) {
+				return array('data' => '');
+			}
+		}
+
+		$threadsorts = $threadtypes = array();
+		$querytmp = DB::query("SELECT typeid, name, special FROM ".DB::table('forum_threadtype')." WHERE special>'0'");
+		while($value = DB::fetch($querytmp)) {
+			$threadsorts[$value['typeid']] = $value;
+		}
+		$querytmp = DB::query("SELECT * FROM ".DB::table('forum_threadclass'));
+		foreach(C::t('forum_threadclass')->range() as $value) {
+			$threadtypes[$value['typeid']] = $value;
+		}
+
 		$sql = ($fids ? ' AND t.fid IN ('.dimplode($fids).')' : '')
 			.($tids ? ' AND t.tid IN ('.dimplode($tids).')' : '')
 			.($uids ? ' AND t.authorid IN ('.dimplode($uids).')' : '')
@@ -303,7 +313,6 @@ class block_thread {
 			.($stick ? ' AND t.displayorder IN ('.dimplode($stick).')' : '')
 			.($bannedids ? ' AND t.tid NOT IN ('.dimplode($bannedids).')' : '')
 			.$keyword
-			.$tagkeyword
 			." AND t.isgroup='0'";
 
 		if($postdateline) {
@@ -325,7 +334,7 @@ class block_thread {
 			$joinmethodpic = 'LEFT';
 		}
 		if($joinmethodpic) {
-			$sqlfrom .= " $joinmethodpic JOIN `".DB::table('forum_threadimage')."` ti ON t.tid=ti.tid AND ti.tid>0";
+			$sqlfrom .= " $joinmethodpic JOIN `".DB::table('forum_threadimage')."` ti ON t.tid=ti.tid";
 			$sqlfield = ', ti.attachment as attachmenturl, ti.remote';
 		}
 
@@ -334,39 +343,29 @@ class block_thread {
 			$sqlfrom .= " $joinmethod JOIN `".DB::table('forum_forumrecommend')."` fc ON fc.tid=t.tid";
 		}
 
-		if($tagkeyword) {
-			$sqlfrom .= " $joinmethod JOIN `".DB::table('common_tagitem')."` tim ON tim.itemid=t.tid AND tim.idtype='tid'";
+		if($tagids) {
+			$sqlfrom .= " $joinmethod JOIN `".DB::table('common_tagitem')."` tim ON tim.tagid IN (".dimplode(array_keys($tagids)).") AND tim.itemid=t.tid AND tim.idtype='tid' ";
+		}
+
+		$maxwhere = '';
+		if(!$tids && !$fids && !$digest && !$stick && $_G['setting']['blockmaxaggregationitem']) {
+			$maxwhere = ($maxid = $this->getmaxid() - $_G['setting']['blockmaxaggregationitem']) > 0 ? 't.tid > '.$maxid.' AND ' : '';
 		}
 
 		$query = DB::query("SELECT DISTINCT t.*$sqlfield
 			FROM `".DB::table('forum_thread')."` t
-			$sqlfrom WHERE t.readperm='0'
+			$sqlfrom WHERE {$maxwhere}t.readperm='0'
 			$sql
 			AND t.displayorder>='0'
 			ORDER BY t.$orderby DESC
 			LIMIT $startrow,$items;"
 			);
-		$threadsorts = $threadtypes = null;
 		while($data = DB::fetch($query)) {
 			$_G['block_thread'][$data['tid']] = $data;
-			if($data['sortid'] && null===$threadsorts) {
-				$threadsorts = array();
-				$querytmp = DB::query("SELECT typeid, name, special FROM ".DB::table('forum_threadtype')." WHERE special>'0'");
-				while($value = DB::fetch($querytmp)) {
-					$threadsorts[$value['typeid']] = $value;
-				}
-			}
-			if($data['typeid'] && null===$threadtypes) {
-				$threadtypes = array();
-				$querytmp = DB::query("SELECT * FROM ".DB::table('forum_threadclass'));
-				while($value = DB::fetch($querytmp)) {
-					$threadtypes[$value['typeid']] = $value;
-				}
-			}
 			if($style['getsummary']) {
 				$threadtids[$data['posttableid']][] = $data['tid'];
 			}
-			$listtids[] = $data['tid'];
+			$listtids[$data['tid']] = $data['tid'];
 			$list[$data['tid']] = array(
 				'id' => $data['tid'],
 				'idtype' => 'tid',
@@ -387,7 +386,6 @@ class block_thread {
 					'lastpost' => $data['lastpost'],
 					'dateline' => $data['dateline'],
 					'replies' => $data['replies'],
-					'icon' => $data['icon'] > 0 ? STATICURL.'image/stamp/'.$_G['cache']['stamps'][$data['icon']]['url'] : '',
 					'forumurl' => 'forum.php?mod=forumdisplay&fid='.$data['fid'],
 					'forumname' => $_G['cache']['forums'][$data['fid']]['name'],
 					'typename' => $threadtypes[$data['typeid']]['name'],
@@ -475,7 +473,7 @@ class block_thread {
 						$polloptions[] = $polloption;
 					}
 				} elseif($thread['special'] == 2) {
-					$trade = DB::fetch_first("SELECT subject, price, credit, aid, pid FROM ".DB::table('forum_trade')." WHERE tid='$tid' ORDER BY displayorder DESC LIMIT 1");
+					$trade = C::t('forum_trade')->fetch_first_goods($tid);
 					$trade['aid'] = $trade['aid'] ? getforumimg($trade['aid']) : '';
 					$trades[$tid][] = $trade;
 				} elseif($thread['special'] == 3) {
@@ -483,21 +481,21 @@ class block_thread {
 					$creditstransextra = $_G['settings']['creditstransextra'];
 					$rewardend = $thread['price'] < 0;
 					$rewardprice = abs($thread['price']);
-					$message = messagecutstr($var, $messagelength);
+					$message = messagecutstr($var, $messagelength, '');
 				} elseif($thread['special'] == 4) {
-					$message = messagecutstr($var, $messagelength);
+					$message = messagecutstr($var, $messagelength, '');
 					$activity = DB::fetch_first("SELECT aid, number, applynumber FROM ".DB::table('forum_activity')." WHERE tid='$tid'");
 					$activity['aid'] = $activity['aid'] ? getforumimg($activity['aid']) : '';
 					$activity['aboutmember'] = $activity['number'] - $activity['applynumber'];
 				} elseif($thread['special'] == 5) {
-					$message = messagecutstr($var, $messagelength);
-					$debate = DB::fetch_first("SELECT affirmdebaters, negadebaters, affirmvotes, negavotes, affirmpoint, negapoint FROM ".DB::table('forum_debate')." WHERE tid='$tid'");
+					$message = messagecutstr($var, $messagelength, '');
+					$debate = C::t('forum_debate')->fetch($tid);
 					$debate['affirmvoteswidth'] = $debate['affirmvotes']  ? intval(80 * (($debate['affirmvotes'] + 1) / ($debate['affirmvotes'] + $debate['negavotes'] + 1))) : 1;
 					$debate['negavoteswidth'] = $debate['negavotes']  ? intval(80 * (($debate['negavotes'] + 1) / ($debate['affirmvotes'] + $debate['negavotes'] + 1))) : 1;
 					$debate['affirmpoint'] = discuzcode($debate['affirmpoint'], 0, 0, 0, 1, 1, 0, 0, 0, 0, 0);
 					$debate['negapoint'] = discuzcode($debate['negapoint'], 0, 0, 0, 1, 1, 0, 0, 0, 0, 0);
 				} else {
-					$message = messagecutstr($var, $messagelength);
+					$message = messagecutstr($var, $messagelength, '');
 				}
 				include template('common/block_thread');
 				$returnarr[$tid] = $return;
@@ -544,6 +542,17 @@ class block_thread {
 				);
 		}
 		return $rt;
+	}
+
+	function getmaxid() {
+		loadcache('databasemaxid');
+		$data = getglobal('cache/databasemaxid');
+		if(!isset($data['thread']) || TIMESTAMP - $data['thread']['dateline'] >= 86400) {
+			$data['thread']['dateline'] = TIMESTAMP;
+			$data['thread']['id'] = DB::result_first('SELECT MAX(tid) FROM '.DB::table('forum_thread'));
+			savecache('databasemaxid', $data);
+		}
+		return $data['thread']['id'];
 	}
 }
 

@@ -15,7 +15,6 @@ if(!defined('IN_DISCUZ')) {
 	exit('Access Denied');
 }
 
-define('DISCUZ_TENPAY_DIRECT', $_G['setting']['ec_tenpay_direct']);
 define('DISCUZ_PARTNER', $_G['setting']['ec_tenpay_bargainor']);
 define('DISCUZ_SECURITYCODE', $_G['setting']['ec_tenpay_key']);
 define('DISCUZ_AGENTID', '1204737401');
@@ -302,69 +301,48 @@ class MediPayResponseHandler extends ResponseHandler {
 
 }
 
-function credit_payurl($price, &$orderid) {
+function credit_payurl($price, &$orderid, $bank = 'DEFAULT') {
 	include_once DISCUZ_ROOT . './source/class/class_chinese.php';
 	global $_G;
 
-	$date = dgmdate(TIMESTAMP, 'Ymd');
+	$date = dgmdate(TIMESTAMP, 'YmdHis');
 	$suffix = dgmdate(TIMESTAMP, 'His').rand(1000, 9999);
 	$transaction_id = DISCUZ_PARTNER.$date.$suffix;
 
 	$orderid = dgmdate(TIMESTAMP, 'YmdHis').random(14);
 
-	if(!DISCUZ_TENPAY_DIRECT) {
-		$reqHandler = new MediPayRequestHandler();
-		$reqHandler->init();
-		$reqHandler->setKey(DISCUZ_TENPAY_OPENTRANS_KEY);
-		$encode_type = '1';
-		if(strtolower(CHARSET) == 'utf-8') {
-			$encode_type = '2';
-		}
+	$chinese = new Chinese(strtoupper(CHARSET), 'GBK');
+	$subject = $chinese->Convert(lang('forum/misc', 'credit_forum_payment').' '.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['title'].' '.intval($price * $_G['setting']['ec_ratio']).' '.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['unit']);
 
-		$reqHandler->setParameter("chnid", DISCUZ_TENPAY_OPENTRANS_CHNID);
-		$reqHandler->setParameter("encode_type", $encode_type);
-		$reqHandler->setParameter("mch_desc", lang('forum/misc', 'credit_forum_payment').'_'.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['title'].'_'.intval($price * $_G['setting']['ec_ratio']).'_'.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['unit'].'_('.$_G['clientip'].')');
-		$reqHandler->setParameter("mch_name", lang('forum/misc', 'credit_forum_payment').'_'.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['title'].'_'.intval($price * $_G['setting']['ec_ratio']));
-		$reqHandler->setParameter("mch_price", $price * 100);
-		$reqHandler->setParameter("mch_returl", $_G['siteurl'].'api/trade/notify_credit.php');
-		$reqHandler->setParameter("mch_type", '2');
-		$reqHandler->setParameter("mch_vno", $orderid);
-		$reqHandler->setParameter("need_buyerinfo", '2');
-		$reqHandler->setParameter("seller", DISCUZ_TENPAY_OPENTRANS_CHNID);
-		$reqHandler->setParameter("show_url",	$_G['siteurl'].'api/trade/notify_credit.php');
-		$reqHandler->setParameter("transport_desc", '');
-		$reqHandler->setParameter("transport_fee", 0);
-		$reqHandler->setParameter('attach', 'tenpay');
-		$reqUrl = $reqHandler->getRequestURL();
-		return $reqUrl;
-	}
 	$reqHandler = new RequestHandler();
-
-	$reqHandler->setGateURL("https://www.tenpay.com/cgi-bin/v1.0/pay_gate.cgi");
+	$reqHandler->setGateURL("https://gw.tenpay.com/gateway/pay.htm");
 
 	$reqHandler->init();
 	$reqHandler->setKey(DISCUZ_SECURITYCODE);
 
-	$reqHandler->setParameter("bargainor_id", DISCUZ_PARTNER);
-	$reqHandler->setParameter("sp_billno", $orderid);
-	$reqHandler->setParameter("transaction_id", $transaction_id);
+	$reqHandler->setParameter("partner", DISCUZ_PARTNER);
+	$reqHandler->setParameter("out_trade_no", $orderid);
 	$reqHandler->setParameter("total_fee", $price * 100);
 	$reqHandler->setParameter("return_url", $_G['siteurl'].'api/trade/notify_credit.php');
-	$chinese = new Chinese(strtoupper(CHARSET), 'GBK');
+	$reqHandler->setParameter("notify_url", $_G['siteurl'].'api/trade/notify_credit.php');
+	$reqHandler->setParameter("body", $subject);
+	$reqHandler->setParameter("bank_type", $bank);
 
-	$reqHandler->setParameter("desc", $chinese->Convert(lang('forum/misc', 'credit_forum_payment').'_'.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['title'].'_'.intval($price * $_G['setting']['ec_ratio']).'_'.$_G['setting']['extcredits'][$_G['setting']['creditstrans']]['unit'].'_('.$_G['clientip'].')'));
-
-	$reqHandler->setParameter("cmdno", "1");
-	$reqHandler->setParameter("date", $date);
-	$reqHandler->setParameter("fee_type", "1");
-	$reqHandler->setParameter("attach", "tenpay");
-	$reqHandler->setParameter("bank_type", "0");
-
-	$reqHandler->setParameter("agentid", DISCUZ_AGENTID);
-	$reqHandler->setParameter("key_index", "1");
-	$reqHandler->setParameter("verify_relation_flag",  "1");
-	$reqHandler->setParameter("ver", "3");
 	$reqHandler->setParameter("spbill_create_ip", $_G['clientip']);
+	$reqHandler->setParameter("fee_type", "1");
+	$reqHandler->setParameter("subject", $subject);
+
+	$reqHandler->setParameter("sign_type", "MD5");
+	$reqHandler->setParameter("service_version", "1.0");
+	$reqHandler->setParameter("input_charset", "GBK");
+	$reqHandler->setParameter("sign_key_index", "1");
+
+	$reqHandler->setParameter("attach", "tenpay");
+	$reqHandler->setParameter("time_start", $date);
+	$reqHandler->setParameter("trade_mode","1");
+	$reqHandler->setParameter("trans_type","1");
+	$reqHandler->setParameter("agentid", DISCUZ_AGENTID);
+	$reqHandler->setParameter("agent_type","2");
 
 	$reqUrl = $reqHandler->getRequestURL();
 	return $reqUrl;
@@ -432,68 +410,48 @@ function trade_payurl($pay, $trade, $tradelog) {
 }
 
 
-function invite_payurl($amount, $price, &$orderid) {
+function invite_payurl($amount, $price, &$orderid, $bank = 'DEFAULT') {
 	include_once DISCUZ_ROOT . './source/class/class_chinese.php';
 	global $_G;
 
-	$date = dgmdate(TIMESTAMP, 'Ymd');
+	$date = dgmdate(TIMESTAMP, 'YmdHis');
 	$suffix = dgmdate(TIMESTAMP, 'His').rand(1000, 9999);
 	$transaction_id = DISCUZ_PARTNER.$date.$suffix;
 
 	$orderid = dgmdate(TIMESTAMP, 'YmdHis').random(14);
 
-	if(!DISCUZ_TENPAY_DIRECT) {
-		$reqHandler = new MediPayRequestHandler();
-		$reqHandler->init();
-		$reqHandler->setKey(DISCUZ_TENPAY_OPENTRANS_KEY);
-		$encode_type = '1';
-		if(strtolower(CHARSET) == 'utf-8') {
-			$encode_type = '2';
-		}
+	$chinese = new Chinese(strtoupper(CHARSET), 'GBK');
+	$subject = $chinese->Convert(lang('forum/misc', 'invite_forum_payment').' '.intval($amount).' '.lang('forum/misc', 'invite_forum_payment_unit'));
 
-		$reqHandler->setParameter("chnid", DISCUZ_TENPAY_OPENTRANS_CHNID);
-		$reqHandler->setParameter("encode_type", $encode_type);
-		$reqHandler->setParameter("mch_desc", lang('forum/misc', 'invite_forum_payment').'_'.intval($amount).'_'.lang('forum/misc', 'invite_forum_payment_unit').'_('.$_G['clientip'].')');
-		$reqHandler->setParameter("mch_name", lang('forum/misc', 'invite_forum_payment').'_'.intval($amount).'_'.lang('forum/misc', 'invite_forum_payment_unit'));
-		$reqHandler->setParameter("mch_price", $price * 100);
-		$reqHandler->setParameter("mch_returl", $_G['siteurl'].'api/trade/notify_invite.php');
-		$reqHandler->setParameter("mch_type", '2');
-		$reqHandler->setParameter("mch_vno", $orderid);
-		$reqHandler->setParameter("need_buyerinfo", '2');
-		$reqHandler->setParameter("seller", DISCUZ_TENPAY_OPENTRANS_CHNID);
-		$reqHandler->setParameter("show_url",	$_G['siteurl'].'api/trade/notify_invite.php');
-		$reqHandler->setParameter("transport_desc", '');
-		$reqHandler->setParameter("transport_fee", 0);
-		$reqHandler->setParameter('attach', 'tenpay');
-		$reqUrl = $reqHandler->getRequestURL();
-		return $reqUrl;
-	}
 	$reqHandler = new RequestHandler();
-
-	$reqHandler->setGateURL("https://www.tenpay.com/cgi-bin/v1.0/pay_gate.cgi");
+	$reqHandler->setGateURL("https://gw.tenpay.com/gateway/pay.htm");
 
 	$reqHandler->init();
 	$reqHandler->setKey(DISCUZ_SECURITYCODE);
 
-	$reqHandler->setParameter("bargainor_id", DISCUZ_PARTNER);
-	$reqHandler->setParameter("sp_billno", $orderid);
-	$reqHandler->setParameter("transaction_id", $transaction_id);
+	$reqHandler->setParameter("partner", DISCUZ_PARTNER);
+	$reqHandler->setParameter("out_trade_no", $orderid);
 	$reqHandler->setParameter("total_fee", $price * 100);
 	$reqHandler->setParameter("return_url", $_G['siteurl'].'api/trade/notify_invite.php');
-	$chinese = new Chinese(strtoupper(CHARSET), 'GBK');
-	$reqHandler->setParameter("desc", $chinese->Convert(lang('forum/misc', 'invite_forum_payment').'_'.intval($amount).'_'.lang('forum/misc', 'invite_forum_payment_unit').'_('.$_G['clientip'].')'));
+	$reqHandler->setParameter("notify_url", $_G['siteurl'].'api/trade/notify_invite.php');
+	$reqHandler->setParameter("body", $subject);
+	$reqHandler->setParameter("bank_type", $bank);
 
-	$reqHandler->setParameter("cmdno", "1");
-	$reqHandler->setParameter("date", $date);
-	$reqHandler->setParameter("fee_type", "1");
-	$reqHandler->setParameter("attach", "tenpay");
-	$reqHandler->setParameter("bank_type", "0");
-
-	$reqHandler->setParameter("agentid", DISCUZ_AGENTID);
-	$reqHandler->setParameter("key_index", "1");
-	$reqHandler->setParameter("verify_relation_flag",  "1");
-	$reqHandler->setParameter("ver", "3");
 	$reqHandler->setParameter("spbill_create_ip", $_G['clientip']);
+	$reqHandler->setParameter("fee_type", "1");
+	$reqHandler->setParameter("subject", $subject);
+
+	$reqHandler->setParameter("sign_type", "MD5");
+	$reqHandler->setParameter("service_version", "1.0");
+	$reqHandler->setParameter("input_charset", "GBK");
+	$reqHandler->setParameter("sign_key_index", "1");
+
+	$reqHandler->setParameter("attach", "tenpay");
+	$reqHandler->setParameter("time_start", $date);
+	$reqHandler->setParameter("trade_mode","1");
+	$reqHandler->setParameter("trans_type","1");
+	$reqHandler->setParameter("agentid", DISCUZ_AGENTID);
+	$reqHandler->setParameter("agent_type","2");
 
 	$reqUrl = $reqHandler->getRequestURL();
 	return $reqUrl;
@@ -501,14 +459,14 @@ function invite_payurl($amount, $price, &$orderid) {
 function trade_notifycheck($type) {
 	global $_G;
 
-	if(DISCUZ_TENPAY_DIRECT && ($type == 'credit' || $type == 'invite')) {
+	if($type == 'credit' || $type == 'invite') {
 		if(!DISCUZ_SECURITYCODE) {
 			exit('Access Denied');
 		}
 		$resHandler = new ResponseHandler();
 		$resHandler->setKey(DISCUZ_SECURITYCODE);
 
-		$resHandler->setParameter("pay_time", "");
+		$resHandler->setParameter("bankname", "");
 	} else {
 		if(!DISCUZ_TENPAY_OPENTRANS_KEY) {
 			exit('Access Denied');
@@ -517,24 +475,15 @@ function trade_notifycheck($type) {
 		$resHandler->setKey(DISCUZ_TENPAY_OPENTRANS_KEY);
 	}
 	if($type == 'credit' || $type == 'invite') {
-		if(DISCUZ_TENPAY_DIRECT && $resHandler->isTenpaySign() && DISCUZ_PARTNER == $_G['gp_bargainor_id']) {
+		if($resHandler->isTenpaySign() && DISCUZ_PARTNER == $_GET['partner']) {
 			return array(
-				'validator'	=> isset($_G['gp_pay_result']) ? !$_G['gp_pay_result'] : 0,
-				'order_no' 	=> $_G['gp_sp_billno'],
-				'trade_no'	=> isset($_G['gp_transaction_id']) ? $_G['gp_transaction_id'] : '',
-				'price' 	=> $_G['gp_total_fee'] / 100,
-				'bargainor_id' => $_G['gp_bargainor_id'],
+				'validator'	=> isset($_GET['trade_state']) ? !$_GET['trade_state'] : 0,
+				'order_no' 	=> $_GET['out_trade_no'],
+				'trade_no'	=> isset($_GET['transaction_id']) ? $_GET['transaction_id'] : '',
+				'price' 	=> $_GET['total_fee'] / 100,
+				'bargainor_id' => $_GET['partner'],
 				'location'	=> true,
 				);
-		}elseif(!DISCUZ_TENPAY_DIRECT && $resHandler->isTenpaySign()) {
-			return array(
-				'validator' => $resHandler->getParameter('retcode') == '0',
-				'order_no' => $resHandler->getParameter('mch_vno'),
-				'trade_no' => $resHandler->getParameter('cft_tid'),
-				'price' => $resHandler->getParameter('total_fee') / 100,
-				'status' => $resHandler->getParameter('status'),
-				'location'	=> true,
-			);
 		}
 	} elseif($type == 'trade') {
 		if($resHandler->isTenpaySign()) {
@@ -601,7 +550,7 @@ function trade_typestatus($method, $status = -1) {
 		case 'refundtrades'	: $methodvalue = array(9, 10);break;
 		case 'unstarttrades'	: $methodvalue = array(0);break;
 	}
-	return $status != -1 ? in_array($status, $methodvalue) : implode('\',\'', $methodvalue);
+	return $status != -1 ? in_array($status, $methodvalue) : $methodvalue;
 }
 
 function trade_getstatus($key, $method = 2) {

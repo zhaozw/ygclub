@@ -59,7 +59,7 @@
 							<!--{/if}-->
 						</td>
 						<td>
-							<a href="portal.php?mod=view&aid=$value[aid]" title="$value[title]" target="_blank" $value['highlight']><!--{if $value['shorttitle']}-->$value['shorttitle']<!--{else}-->$value['title']<!--{/if}--></a>
+							<a href="{echo fetch_article_url($value);}" title="$value[title]" target="_blank" $value['highlight']><!--{if $value['shorttitle']}-->$value['shorttitle']<!--{else}-->$value['title']<!--{/if}--></a>
 							<!--{if $value[taghtml]}--><em>$value[taghtml]</em><!--{/if}-->
 							<!--{if $value[status] == 1}--><b>({lang moderate_need})</b><!--{/if}-->
 							<!--{if $value[status] == 2}--><b>({lang ignored})</b><!--{/if}-->

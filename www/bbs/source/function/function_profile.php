@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: function_profile.php 32370 2013-01-07 03:00:27Z zhangguosheng $
+ *      $Id: function_profile.php 33491 2013-06-24 07:13:17Z kamichen $
  */
 
 if(!defined('IN_DISCUZ')) {
@@ -26,9 +26,8 @@ function profile_setting($fieldid, $space=array(), $showstatus=false, $ignoreunc
 		$uid = intval($space['uid']);
 		if($uid && !isset($_G['profile_verifys'][$uid])) {
 			$_G['profile_verifys'][$uid] = array();
-			$query = DB::query('SELECT field FROM '.DB::table('common_member_verify_info')." WHERE uid = '$uid' AND verifytype='0'");
-			while($value = DB::fetch($query)) {
-				$fields = unserialize($value['field']);
+			if($value = C::t('common_member_verify_info')->fetch_by_uid_verifytype($uid, 0)) {
+				$fields = dunserialize($value['field']);
 				foreach($fields as $key => $fvalue) {
 					if($_G['cache']['profilesetting'][$key]['needverify']) {
 						$_G['profile_verifys'][$uid][$key] = $fvalue;
@@ -137,6 +136,8 @@ function profile_setting($fieldid, $space=array(), $showstatus=false, $ignoreunc
 		} else {
 			$html = '<p id="residedistrictbox">'.showdistrict($values, $elems, 'residedistrictbox', 1, 'reside').'</p>';
 		}
+	} elseif($fieldid=='qq') {
+		$html = "<input type=\"text\" name=\"$fieldid\" id=\"$fieldid\" class=\"px\" value=\"$space[$fieldid]\" tabindex=\"1\" /><p><a href=\"\" class=\"xi2\" onclick=\"this.href='http://wp.qq.com/set.html?from=discuz&uin='+$('$fieldid').value\" target=\"_blank\">".lang('spacecp', 'qq_set_status')."</a></p>";
 	} else {
 		if($field['unchangeable'] && $space[$fieldid]!='') {
 			if($field['formtype']=='file') {
@@ -150,14 +151,14 @@ function profile_setting($fieldid, $space=array(), $showstatus=false, $ignoreunc
 			$html = "<textarea name=\"$fieldid\" id=\"$fieldid\" class=\"pt\" rows=\"3\" cols=\"40\" tabindex=\"1\">$space[$fieldid]</textarea>";
 		} elseif($field['formtype']=='select') {
 			$field['choices'] = explode("\n", $field['choices']);
-			$html = "<select name=\"$fieldid\" class=\"ps\" tabindex=\"1\">";
+			$html = "<select name=\"$fieldid\" id=\"$fieldid\" class=\"ps\" tabindex=\"1\">";
 			foreach($field['choices'] as $op) {
 				$html .= "<option value=\"$op\"".($op==$space[$fieldid] ? 'selected="selected"' : '').">$op</option>";
 			}
 			$html .= '</select>';
 		} elseif($field['formtype']=='list') {
 			$field['choices'] = explode("\n", $field['choices']);
-			$html = "<select name=\"{$fieldid}[]\" class=\"ps\" multiple=\"multiplue\" tabindex=\"1\">";
+			$html = "<select name=\"{$fieldid}[]\" id=\"$fieldid\" class=\"ps\" multiple=\"multiplue\" tabindex=\"1\">";
 			$space[$fieldid] = explode("\n", $space[$fieldid]);
 			foreach($field['choices'] as $op) {
 				$html .= "<option value=\"$op\"".(in_array($op, $space[$fieldid]) ? 'selected="selected"' : '').">$op</option>";
@@ -168,7 +169,7 @@ function profile_setting($fieldid, $space=array(), $showstatus=false, $ignoreunc
 			$space[$fieldid] = explode("\n", $space[$fieldid]);
 			foreach($field['choices'] as $op) {
 				$html .= ''
-					."<label class=\"lb\"><input type=\"checkbox\" name=\"{$fieldid}[]\" class=\"pc\" value=\"$op\" tabindex=\"1\"".(in_array($op, $space[$fieldid]) ? ' checked="checked"' : '')." />"
+					."<label class=\"lb\"><input type=\"checkbox\" name=\"{$fieldid}[]\" id=\"$fieldid\" class=\"pc\" value=\"$op\" tabindex=\"1\"".(in_array($op, $space[$fieldid]) ? ' checked="checked"' : '')." />"
 					."$op</label>";
 			}
 		} elseif($field['formtype']=='radio') {
@@ -179,13 +180,13 @@ function profile_setting($fieldid, $space=array(), $showstatus=false, $ignoreunc
 						."$op</label>";
 			}
 		} elseif($field['formtype']=='file') {
-			$html = "<input type=\"file\" value=\"\" name=\"$fieldid\" tabindex=\"1\" class=\"pf\" style=\"height:26px;\" /><input type=\"hidden\" name=\"$fieldid\" value=\"$space[$fieldid]\" />";
+			$html = "<input type=\"file\" value=\"\" name=\"$fieldid\" id=\"$fieldid\" tabindex=\"1\" class=\"pf\" style=\"height:26px;\" /><input type=\"hidden\" name=\"$fieldid\" value=\"$space[$fieldid]\" />";
 			if(!empty($space[$fieldid])) {
 				$url = getglobal('setting/attachurl').'./profile/'.$space[$fieldid];
-				$html .= "&nbsp;<label><input type=\"checkbox\" class=\"checkbox\" tabindex=\"1\" name=\"deletefile[$fieldid]\" value=\"yes\" />".lang('spacecp', 'delete')."</label><br /><a href=\"$url\" target=\"_blank\"><img src=\"$url\" width=\"200\" class=\"mtm\" /></a>";
+				$html .= "&nbsp;<label><input type=\"checkbox\" class=\"checkbox\" tabindex=\"1\" name=\"deletefile[$fieldid]\" id=\"$fieldid\" value=\"yes\" />".lang('spacecp', 'delete')."</label><br /><a href=\"$url\" target=\"_blank\"><img src=\"$url\" width=\"200\" class=\"mtm\" /></a>";
 			}
 		} else {
-			$html = "<input type=\"text\" name=\"$fieldid\" class=\"px\" value=\"$space[$fieldid]\" tabindex=\"1\" />";
+			$html = "<input type=\"text\" name=\"$fieldid\" id=\"$fieldid\" class=\"px\" value=\"$space[$fieldid]\" tabindex=\"1\" />";
 		}
 	}
 	$html .= !$ignoreshowerror ? "<div class=\"rq mtn\" id=\"showerror_$fieldid\"></div>" : '';
@@ -230,10 +231,10 @@ function profile_check($fieldid, &$value, $space=array()) {
 		if($field['required']) {
 			if(in_array($fieldid, array('birthprovince', 'birthcity', 'birthdist', 'birthcommunity', 'resideprovince', 'residecity', 'residedist', 'residecommunity'))) {
 				if(substr($fieldid, 0, 5) == 'birth') {
-					if(!empty($_G['gp_birthprovince']) || !empty($_G['gp_birthcity']) || !empty($_G['gp_birthdist']) || !empty($_G['gp_birthcommunity'])) {
+					if(!empty($_GET['birthprovince']) || !empty($_GET['birthcity']) || !empty($_GET['birthdist']) || !empty($_GET['birthcommunity'])) {
 						return true;
 					}
-				} elseif(!empty($_G['gp_resideprovince']) || !empty($_G['gp_residecity']) || !empty($_G['gp_residedist']) || !empty($_G['gp_residecommunity'])) {
+				} elseif(!empty($_GET['resideprovince']) || !empty($_GET['residecity']) || !empty($_GET['residedist']) || !empty($_GET['residecommunity'])) {
 					return true;
 				}
 			}
@@ -251,7 +252,7 @@ function profile_check($fieldid, &$value, $space=array()) {
 		$value = intval($value);
 		return true;
 	} elseif(in_array($fieldid, array('birthprovince', 'birthcity', 'birthdist', 'birthcommunity', 'resideprovince', 'residecity', 'residedist', 'residecommunity'))) {
-		$value = getstr($value, '', 1, 1);
+		$value = getstr($value);
 		return true;
 	}
 
@@ -259,7 +260,7 @@ function profile_check($fieldid, &$value, $space=array()) {
 		$field['choices'] = explode("\n", $field['choices']);
 	}
 	if($field['formtype'] == 'text' || $field['formtype'] == 'textarea') {
-		$value = getstr($value, '', 1, 1);
+		$value = getstr($value);
 		if($field['size'] && strlen($value) > $field['size']) {
 			return false;
 		} else {
@@ -271,7 +272,7 @@ function profile_check($fieldid, &$value, $space=array()) {
 	} elseif($field['formtype'] == 'checkbox' || $field['formtype'] == 'list') {
 		$arr = array();
 		foreach ($value as $op) {
-			if(in_array(stripslashes($op), $field['choices'])) {
+			if(in_array($op, $field['choices'])) {
 				$arr[] = $op;
 			}
 		}
@@ -280,7 +281,7 @@ function profile_check($fieldid, &$value, $space=array()) {
 			return false;
 		}
 	} elseif($field['formtype'] == 'radio' || $field['formtype'] == 'select') {
-		if(!in_array(stripslashes($value), $field['choices'])){
+		if(!in_array($value, $field['choices'])){
 			return false;
 		}
 	}
@@ -292,6 +293,9 @@ function profile_show($fieldid, $space=array(), $getalone = false) {
 
 	if(empty($_G['cache']['profilesetting'])) {
 		loadcache('profilesetting');
+	}
+	if($fieldid == 'qqnumber') {
+		$_G['cache']['profilesetting'][$fieldid] = $_G['cache']['profilesetting']['qq'];
 	}
 	$field = $_G['cache']['profilesetting'][$fieldid];
 	if(empty($field) || !$field['available'] || (!$getalone && in_array($fieldid, array('uid', 'birthmonth', 'birthyear', 'birthprovince', 'resideprovince')))) {
@@ -319,6 +323,12 @@ function profile_show($fieldid, $space=array(), $getalone = false) {
 	} elseif($fieldid == 'site') {
 		$url = str_replace('"', '\\"', $space[$fieldid]);
 		return "<a href=\"$url\" target=\"_blank\">$url</a>";
+	} elseif($fieldid == 'position') {
+		return nl2br($space['office'] ? $space['office'] : $space['position']);
+	} elseif($fieldid == 'qq') {
+		return '<a href="http://wpa.qq.com/msgrd?V=3&Uin='.$space[$fieldid].'&Site='.$_G['setting']['bbname'].'&Menu=yes&from=discuz" target="_blank" title="'.lang('spacecp', 'qq_dialog').'"><img src="'.STATICURL.'/image/common/qq.gif" alt="QQ" style="margin:0px;"/></a>';
+	} elseif($fieldid == 'qqnumber') {
+		return $space['qq'];
 	} else {
 		return nl2br($space[$fieldid]);
 	}
@@ -345,8 +355,7 @@ function showdistrict($values, $elems=array(), $container='districtbox', $showle
 	}
 	$options = array(1=>array(), 2=>array(), 3=>array(), 4=>array());
 	if($upids && is_array($upids)) {
-		$query = DB::query('SELECT * FROM '.DB::table('common_district')." WHERE upid IN (".dimplode($upids).') ORDER BY displayorder');
-		while($value = DB::fetch($query)) {
+		foreach(C::t('common_district')->fetch_all_by_upid($upids, 'displayorder', 'ASC') as $value) {
 			if($value['level'] == 1 && ($value['id'] != $values[0] && ($value['usetype'] == 0 || !(($containertype == 'birth' && in_array($value['usetype'], array(1, 3))) || ($containertype != 'birth' && in_array($value['usetype'], array(2, 3))))))) {
 				continue;
 			}
@@ -383,9 +392,7 @@ function countprofileprogress($uid = 0) {
 	global $_G;
 
 	$uid = intval(!$uid ? $_G['uid'] : $uid);
-	$result = DB::fetch_first("SELECT * FROM ".DB::table('common_setting')." WHERE skey='profilegroup'");
-	if(!empty($result['svalue'])) {
-		$profilegroup = unserialize($result['svalue']);
+	if(($profilegroup = C::t('common_setting')->fetch('profilegroup', true))) {
 		$fields = array();
 		foreach($profilegroup as $type => $value) {
 			foreach($value['field'] as $key => $field) {
@@ -401,7 +408,7 @@ function countprofileprogress($uid = 0) {
 		loadcache('profilesetting');
 		$allowcstatus = !empty($_G['group']['allowcstatus']) ? true : false;
 		$complete = 0;
-		$profile = DB::fetch_first("SELECT p.*, f.sightml, f.customstatus FROM ".DB::table('common_member_profile')." p LEFT JOIN ".DB::table('common_member_field_forum')." f USING(uid)  WHERE p.uid='$uid'");
+		$profile = array_merge(C::t('common_member_profile')->fetch($uid), C::t('common_member_field_forum')->fetch($uid));
 		foreach($fields as $key) {
 			if((!isset($_G['cache']['profilesetting'][$key]) || !$_G['cache']['profilesetting'][$key]['available']) && !in_array($key, array('sightml', 'customstatus'))) {
 				unset($fields[$key]);
@@ -433,7 +440,7 @@ function countprofileprogress($uid = 0) {
 			}
 		}
 		$progress = floor($complete / count($fields) * 100);
-		DB::update('common_member_status', array('profileprogress' => $progress > 100 ? 100 : $progress), array('uid' => $uid));
+		C::t('common_member_status')->update($uid, array('profileprogress' => $progress > 100 ? 100 : $progress), 'UNBUFFERED');
 		return $progress;
 	}
 }

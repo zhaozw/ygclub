@@ -1,8 +1,8 @@
 /*
-	[Discuz!] (C)2001-2009 Comsenz Inc.
+	[Discuz!] (C)2001-2099 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: home.js 32101 2012-11-09 09:39:45Z zhengqingpeng $
+	$Id: home.js 32590 2013-02-22 09:42:48Z monkey $
 */
 
 var note_step = 0;
@@ -153,7 +153,7 @@ function copyRow(tbody) {
 		add = true;
 	}
 	tags = newnode.getElementsByTagName('input');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].name == 'pics[]') {
 			tags[i].value = 'http://';
 		}
@@ -167,7 +167,7 @@ function delRow(obj, tbody) {
 	if($(tbody).rows.length == 1) {
 		var trobj = obj.parentNode.parentNode;
 		tags = trobj.getElementsByTagName('input');
-		for(i in tags) {
+		for(i = 0;i < tags.length;i++) {
 			if(tags[i].name == 'pics[]') {
 				tags[i].value = 'http://';
 			}
@@ -644,6 +644,10 @@ function comment_edit(cid) {
 	var x = new Ajax();
 	x.get('home.php?mod=misc&ac=ajax&op=comment&inajax=1&cid='+ cid, function(s){
 		obj.innerHTML = s;
+		var elems = selector('dd[class~=magicflicker]');
+		for(var i=0; i<elems.length; i++){
+			magicColor(elems[i]);
+		}
 	});
 }
 function comment_delete(cid) {
@@ -697,7 +701,7 @@ function post_add(pid, result) {
 			$('message').value= '';
 			newnode = $('quickpostimg').rows[0].cloneNode(true);
 			tags = newnode.getElementsByTagName('input');
-			for(i in tags) {
+			for(i = 0;i < tags.length;i++) {
 				if(tags[i].name == 'pics[]') {
 					tags[i].value = 'http://';
 				}
@@ -771,13 +775,6 @@ function mtag_join(tagid, result) {
 	}
 }
 
-function picView(albumid) {
-	if(albumid == 'none') {
-		$('albumpic_body').innerHTML = '';
-	} else {
-		ajaxget('home.php?mod=misc&ac=ajax&op=album&id='+albumid+'&ajaxdiv=albumpic_body', 'albumpic_body');
-	}
-}
 function resend_mail(mid) {
 	if(mid) {
 		var obj = $('sendmail_'+ mid +'_li');
@@ -1161,4 +1158,14 @@ function checkSynSignature() {
 		$('syn_signature').className = 'syn_signature_check';
 		$('to_signhtml').value = '1';
 	}
+}
+
+function searchpostbyusername(keyword, srchuname) {
+	window.location.href = 'search.php?mod=forum&srchtxt=' + keyword + '&srchuname=' + srchuname + '&searchsubmit=yes';
+}
+
+function removeVisitor(event, uid) {
+	window.location = 'home.php?mod=space&uid='+uid+'&do=index&view=admin&additional=removevlog';
+	event.preventDefault();
+	event.stopPropagation();
 }

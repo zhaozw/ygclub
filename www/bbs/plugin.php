@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: plugin.php 32043 2012-11-01 08:37:29Z monkey $
+ *      $Id: plugin.php 27335 2012-01-16 10:15:37Z monkey $
  */
 
 define('APPTYPEID', 127);
@@ -13,18 +13,18 @@ define('CURSCRIPT', 'plugin');
 
 require './source/class/class_core.php';
 
-$discuz = & discuz_core::instance();
+$discuz = C::app();
 
-$mod = htmlspecialchars(!empty($_GET['mod']) ? $_GET['mod'] : (!empty($_POST['mod']) ? $_POST['mod'] : ''));
-
-$cachelist = array('plugin');
+$cachelist = array('plugin', 'diytemplatename');
 
 $discuz->cachelist = $cachelist;
 $discuz->init();
 
-if(!empty($_G['gp_id'])) {
-	list($identifier, $module) = explode(':', $_G['gp_id']);
+if(!empty($_GET['id'])) {
+	list($identifier, $module) = explode(':', $_GET['id']);
 	$module = $module !== NULL ? $module : $identifier;
+} else {
+	showmessage('plugin_nonexistence');
 }
 $mnid = 'plugin_'.$identifier.'_'.$module;
 $pluginmodule = isset($_G['setting']['pluginlinks'][$identifier][$module]) ? $_G['setting']['pluginlinks'][$identifier][$module] : (isset($_G['setting']['plugins']['script'][$identifier][$module]) ? $_G['setting']['plugins']['script'][$identifier][$module] : array('adminid' => 0, 'directory' => preg_match("/^[a-z]+[a-z0-9_]*$/i", $identifier) ? $identifier.'/' : ''));

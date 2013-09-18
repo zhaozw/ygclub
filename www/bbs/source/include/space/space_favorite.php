@@ -4,20 +4,22 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: space_favorite.php 22215 2011-04-26 06:51:46Z monkey $
+ *      $Id: space_favorite.php 31313 2012-08-10 03:51:03Z zhangguosheng $
  */
 
 if(!defined('IN_DISCUZ')) {
 	exit('Access Denied');
 }
 
-$space = getspace($_G['uid']);
+$space = getuserbyuid($_G['uid']);
 
 $page = empty($_GET['page'])?1:intval($_GET['page']);
 if($page<1) $page=1;
 $id = empty($_GET['id'])?0:intval($_GET['id']);
 
 $perpage = 20;
+
+$_G['disabledwidthauto'] = 0;
 
 $start = ($page-1)*$perpage;
 ckstart($start, $perpage);
@@ -35,25 +37,12 @@ $gets = array(
 );
 $theurl = 'home.php?'.url_implode($gets);
 
-
 $wherearr = $list = array();
 $favid = empty($_GET['favid'])?0:intval($_GET['favid']);
-if($favid) {
-	$wherearr[] = "favid='$favid'";
-}
-$wherearr[] = "uid='$_G[uid]'";
 $idtype = isset($idtypes[$_GET['type']]) ? $idtypes[$_GET['type']] : '';
-if($idtype) {
-	$wherearr[] = "idtype='$idtype'";
-}
-$wheresql = implode(' AND ', $wherearr);
 
-$count = DB::result(DB::query("SELECT COUNT(*) FROM ".DB::table('home_favorite')." WHERE $wheresql"),0);
+$count = C::t('home_favorite')->count_by_uid_idtype($_G['uid'], $idtype, $favid);
 if($count) {
-	$query = DB::query("SELECT * FROM ".DB::table('home_favorite')."
-		WHERE $wheresql
-		ORDER BY dateline DESC
-		LIMIT $start,$perpage");
 	$icons = array(
 		'tid'=>'<img src="static/image/feed/thread.gif" alt="thread" class="t" /> ',
 		'fid'=>'<img src="static/image/feed/discuz.gif" alt="forum" class="t" /> ',
@@ -63,11 +52,24 @@ if($count) {
 		'albumid'=>'<img src="static/image/feed/album.gif" alt="album" class="t" /> ',
 		'aid'=>'<img src="static/image/feed/article.gif" alt="article" class="t" /> ',
 	);
-	while ($value = DB::fetch($query)) {
+	$articles = array();
+	foreach(C::t('home_favorite')->fetch_all_by_uid_idtype($_G['uid'], $idtype, $favid, $start,$perpage) as $value) {
 		$value['icon'] = isset($icons[$value['idtype']]) ? $icons[$value['idtype']] : '';
 		$value['url'] = makeurl($value['id'], $value['idtype'], $value['spaceuid']);
 		$value['description'] = !empty($value['description']) ? nl2br($value['description']) : '';
 		$list[$value['favid']] = $value;
+		if($value['idtype'] == 'aid') {
+			$articles[$value['favid']] = $value['id'];
+		}
+	}
+	if(!empty($articles)) {
+		$_urls = array();
+		foreach(C::t('portal_article_title')->fetch_all($articles) as $aid => $article) {
+			$_urls[$aid] = fetch_article_url($article);
+		}
+		foreach ($articles as $favid => $aid) {
+			$list[$favid]['url'] = $_urls[$aid];
+		}
 	}
 }
 

@@ -1,8 +1,8 @@
 /*
-	[Discuz!] (C)2001-2009 Comsenz Inc.
+	[Discuz!] (C)2001-2099 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: home_drag.js 17522 2010-10-20 13:57:03Z monkey $
+	$Id: home_drag.js 32655 2013-02-28 04:08:00Z zhengqingpeng $
 */
 
 var Drags       = [];
@@ -326,7 +326,7 @@ function init_drag2(){
 		var cObj = $('applistcontent');
 		dragHelper = document.createElement('div');
 		dragHelper.style.cssName = "apps dragable";
-		dragHelper.style.cssText = 'position:absolute;display:none;width:374px;';
+		dragHelper.style.cssText = 'position:absolute;display:none;width:777px;';
 		cObj.parentNode.insertBefore(dragHelper, cObj);
 	}
 }

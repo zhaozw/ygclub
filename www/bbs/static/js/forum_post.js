@@ -1,10 +1,11 @@
 /*
-	[Discuz!] (C)2001-2009 Comsenz Inc.
+	[Discuz!] (C)2001-2099 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: forum_post.js 22843 2011-05-25 09:39:50Z monkey $
+	$Id: forum_post.js 33179 2013-05-06 03:16:25Z nemohou $
 */
 
+var forum_post_inited = true;
 var postSubmited = false;
 var AID = {0:1,1:1};
 var UPLOADSTATUS = -1;
@@ -22,12 +23,12 @@ var STATUSMSG = {
 	'3' : '用户组限制无法上传那么大的附件',
 	'4' : '不支持此类扩展名',
 	'5' : '文件类型限制无法上传那么大的附件',
-	'6' : '今日你已无法上传更多的附件',
+	'6' : '今日您已无法上传更多的附件',
 	'7' : '请选择图片文件(' + imgexts + ')',
 	'8' : '附件文件无法保存',
 	'9' : '没有合法的文件被上传',
 	'10' : '非法操作',
-	'11' : '今日你已无法上传那么大的附件'
+	'11' : '今日您已无法上传那么大的附件'
 };
 
 EXTRAFUNC['validator'] = [];
@@ -55,7 +56,10 @@ function ctlent(event) {
 }
 
 function checklength(theform) {
-	var message = wysiwyg ? html2bbcode(getEditorContents()) : (!theform.parseurloff.checked ? parseurl(theform.message.value) : theform.message.value);
+	var message = wysiwyg ? html2bbcode(getEditorContents()) : theform.message.value;
+	if(!theform.parseurloff.checked) {
+		message = parseurl(message);
+	}
 	showDialog('当前长度: ' + mb_strlen(message) + ' 字节，' + (postmaxchars != 0 ? '系统限制: ' + postminchars + ' 到 ' + postmaxchars + ' 字节。' : ''), 'notice', '字数检查');
 }
 
@@ -64,7 +68,10 @@ if(!tradepost) {
 }
 
 function validate(theform) {
-	var message = wysiwyg ? html2bbcode(getEditorContents()) : (!theform.parseurloff.checked ? parseurl(theform.message.value) : theform.message.value);
+	var message = wysiwyg ? html2bbcode(getEditorContents()) : theform.message.value;
+	if(!theform.parseurloff.checked) {
+		message = parseurl(message);
+	}
 	if(($('postsubmit').name != 'replysubmit' && !($('postsubmit').name == 'editsubmit' && !isfirstpost) && theform.subject.value == "") || !sortid && !special && trim(message) == "") {
 		showError('抱歉，您尚未输入标题或内容');
 		return false;
@@ -73,8 +80,6 @@ function validate(theform) {
 		return false;
 	}
 	if(ispicstyleforum == 1 && ATTACHORIMAGE == 0 && isfirstpost) {
-		showError('帖图版块至少应上传一张图片作为封面');
-		return false;
 	}
 	if(in_array($('postsubmit').name, ['topicsubmit', 'editsubmit'])) {
 		if(theform.typeid && (theform.typeid.options && theform.typeid.options[theform.typeid.selectedIndex].value == 0) && typerequired) {
@@ -108,18 +113,15 @@ function validate(theform) {
 		AUTOPOST = 1;
 		return false;
 	}
-	if($(editorid + '_attachlist')) {
-		$('postbox').appendChild($(editorid + '_attachlist'));
-		$(editorid + '_attachlist').style.display = 'none';
+	if(isfirstpost && $('adddynamic') != null && $('adddynamic').checked && $('postsave') != null && isNaN(parseInt($('postsave').value)) && ($('readperm') != null && $('readperm').value || $('price') != null && $('price').value)) {
+		if(confirm('由于您设置了阅读权限或出售帖，您确认还转播给您的听众看吗？') == false) {
+			return false;
+		}
 	}
-	if($(editorid + '_imgattachlist')) {
-		$('postbox').appendChild($(editorid + '_imgattachlist'));
-		$(editorid + '_imgattachlist').style.display = 'none';
-	}
-	hideMenu();
 	theform.message.value = message;
 	if($('postsubmit').name == 'editsubmit') {
-		return true;
+		postsubmit(theform);
+		return false;
 	} else if(in_array($('postsubmit').name, ['topicsubmit', 'replysubmit'])) {
 		if(seccodecheck || secqaacheck) {
 			var chk = 1, chkv = '';
@@ -154,6 +156,16 @@ function validate(theform) {
 }
 
 function postsubmit(theform) {
+	if($(editorid + '_attachlist')) {
+		$('postbox').appendChild($(editorid + '_attachlist'));
+		$(editorid + '_attachlist').style.display = 'none';
+	}
+	if($(editorid + '_imgattachlist')) {
+		$('postbox').appendChild($(editorid + '_imgattachlist'));
+		$(editorid + '_imgattachlist').style.display = 'none';
+	}
+	hideMenu();
+
 	theform.replysubmit ? theform.replysubmit.disabled = true : (theform.editsubmit ? theform.editsubmit.disabled = true : theform.topicsubmit.disabled = true);
 	theform.submit();
 }
@@ -276,10 +288,10 @@ function addAttach(prefix) {
 	prefix = isUndefined(prefix) ? '' : prefix;
 	newnode = $(prefix + 'attachbtnhidden').firstChild.cloneNode(true);
 	tags = newnode.getElementsByTagName('input');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].name == 'Filedata') {
 			tags[i].id = prefix + 'attachnew_' + id;
-			tags[i].onchange = function() {insertAttach(prefix, id)};
+			tags[i].onchange = function() {insertAttach(prefix, id);};
 			tags[i].unselectable = 'on';
 		} else if(tags[i].name == 'attachid') {
 			tags[i].value = id;
@@ -290,13 +302,13 @@ function addAttach(prefix) {
 	$(prefix + 'attachbtn').appendChild(newnode);
 	newnode = $(prefix + 'attachbodyhidden').firstChild.cloneNode(true);
 	tags = newnode.getElementsByTagName('input');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].name == prefix + 'localid[]') {
 			tags[i].value = id;
 		}
 	}
 	tags = newnode.getElementsByTagName('span');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].id == prefix + 'localfile[]') {
 			tags[i].id = prefix + 'localfile_' + id;
 		} else if(tags[i].id == prefix + 'cpdel[]') {
@@ -313,7 +325,6 @@ function addAttach(prefix) {
 }
 
 function insertAttach(prefix, id) {
-	var localimgpreview = '';
 	var path = $(prefix + 'attachnew_' + id).value;
 	var extpos = path.lastIndexOf('.');
 	var ext = extpos == -1 ? '' : path.substr(extpos + 1, path.length).toLowerCase();
@@ -397,7 +408,7 @@ function appendAttachDel(ids) {
 		aids += '&aids[]=' + id;
 	}
 	var x = new Ajax();
-	x.get('forum.php?mod=ajax&action=deleteattach&inajax=yes&tid=' + (typeof tid == 'undefined' ? 0 : tid) + '&pid=' + (typeof pid == 'undefined' ? 0 : pid) + aids, function() {});
+	x.get('forum.php?mod=ajax&action=deleteattach&inajax=yes&tid=' + (typeof tid == 'undefined' ? 0 : tid) + '&pid=' + (typeof pid == 'undefined' ? 0 : pid) + aids + ($('modthreadkey') ? '&modthreadkey=' + $('modthreadkey').value : ''), function() {});
 	if($('delattachop')) {
 		$('delattachop').value = 1;
 	}
@@ -458,6 +469,7 @@ function updateImageList(action, aids) {
 }
 
 function updateDownImageList(msg) {
+	hideMenu('fwin_dialog', 'dialog');
 	if(msg == '') {
 		showError('抱歉，暂无远程附件');
 	} else {
@@ -596,8 +608,15 @@ function switchpollm(swt) {
 
 function addpolloption() {
 	if(curoptions < maxoptions) {
-		$('polloption_new').outerHTML = '<p>' + $('polloption_hidden').innerHTML + '</p>' + $('polloption_new').outerHTML;
+		var imgid = 'newpoll_'+curnumber;
+		var proid = 'pollUploadProgress_'+curnumber;
+		var pollstr = $('polloption_hidden').innerHTML.replace('newpoll', imgid);
+		pollstr = pollstr.replace('pollUploadProgress', proid);
+		$('polloption_new').outerHTML = '<p>' + pollstr + '</p>' + $('polloption_new').outerHTML;
 		curoptions++;
+		curnumber++;
+		addUploadEvent(imgid, proid)
+
 	} else {
 		$('polloption_new').outerHTML = '<span>已达到最大投票数'+maxoptions+'</span>';
 	}
@@ -617,7 +636,7 @@ function insertsave(pid) {
 
 function userdataoption(op) {
 	if(!op) {
-		saveUserdata('forum', '');
+		saveUserdata('forum_'+discuz_uid, '');
 		display('rstnotice');
 	} else {
 		loadData();
@@ -649,6 +668,14 @@ function attachoption(type, op) {
 			if(type == 'attach') {
 				updateAttachList(1, aids);
 			} else {
+				list = $('imgattachlist').getElementsByTagName('TD');
+				re = /^image\_td\_(\d+)$/;
+				for(i = 0;i < list.length;i++) {
+					var matches = re.exec(list[i].id);
+					if(matches != null) {
+						aids += '|' + matches[1];
+					}
+				}
 				updateImageList(1, aids);
 			}
 		}
@@ -656,7 +683,7 @@ function attachoption(type, op) {
 	} else if(op == 2) {
 		showDialog('<div id="unusedwin" class="c altw" style="overflow:auto;height:100px;">' + $('unusedlist_' + type).innerHTML + '</div>' +
 			'<p class="o pns"><span class="z xg1"><label for="unusedwinchkall"><input id="unusedwinchkall" type="checkbox" onclick="attachoption(\'' + type + '\', 3)" checked="checked" />全选</label></span>' +
-			'<button onclick="attachoption(\'' + type + '\', 1);hideMenu(\'fwin_dialog\', \'dialog\')" class="pn pnc"><strong>确定</strong></button></p>', 'info', '未使用的' + (type == 'attach' ? '附件' : '图片'));
+			'<button onclick="attachoption(\'' + type + '\', 1);hideMenu(\'fwin_dialog\', \'dialog\')" class="pn pnc"><strong>使用</strong></button></p>', 'info', '未使用的' + (type == 'attach' ? '附件' : '图片'));
 	} else if(op == 3) {
 		list = $('unusedwin').getElementsByTagName('INPUT');
 		for(i = 0;i < list.length;i++) {
@@ -688,7 +715,7 @@ function insertAllAttachTag() {
 			var attach = attachListObj[i];
 			var ids = attach.id.split('_');
 			if(ids[0] == 'attach') {
-				if($('attachname'+ids[1])) {
+				if($('attachname'+ids[1]) && attach.style.display != 'none') {
 					if(parseInt($('attachname'+ids[1]).getAttribute('isimage'))) {
 						insertAttachimgTag(ids[1]);
 					} else {
@@ -755,6 +782,20 @@ function extraCheck(op) {
 		$('extra_rushreplyset_chk').className = $('rushreply').checked ? 'a' : '';
 	} else if(op == 4 && $('tags')) {
 		$('extra_tag_chk').className = $('tags').value !== '' ? 'a' : '';
+	} else if(op == 5 && $('cronpublish')) {
+		$('extra_pubdate_chk').className = $('cronpublish').checked ? 'a' : '';
+	}
+}
+
+function hidenFollowBtn(flag) {
+	var fobj = $('adddynamicspan');
+	if(fobj) {
+		if(flag) {
+			$('adddynamic').checked = !flag;
+			fobj.style.display = 'none';
+		} else {
+			fobj.style.display = '';
+		}
 	}
 }
 

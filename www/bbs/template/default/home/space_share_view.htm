@@ -63,14 +63,14 @@
 				</div>
 				<!--{/if}-->
 				<div id="comment_ul" class="xld xlda">
-				<!--{loop $list $value}-->
+				<!--{loop $list $k $value}-->
 					<!--{template home/space_comment_li}-->
 				<!--{/loop}-->
 				</div>
 			</div>
 			<!--{if $multi}--><div class="pgs cl mtm">$multi</div><!--{/if}-->
 		</div>
-		<!--{if !$share[noreply]}-->
+		<!--{if !$share[noreply] && helper_access::check_module('share')}-->
 		<form id="quickcommentform_{$id}" name="quickcommentform_{$id}" action="home.php?mod=spacecp&ac=comment&handlekey=qcshare_{$id}" method="post" autocomplete="off" onsubmit="ajaxpost('quickcommentform_{$id}', 'return_qcshare_$id');doane(event);">
 			<!--{if $_G['uid']}-->
 				<p>
@@ -82,7 +82,7 @@
 			<!--{/if}-->
 			<div class="tedt mtn mbn">
 				<div class="area">
-					<!--{if $_G['uid']||$_G['group']['allowcomment']}-->
+					<!--{if $_G['uid'] || $_G['group']['allowcomment']}-->
 						<textarea id="comment_message" name="message" rows="5" onkeydown="ctrlEnter(event, 'commentsubmit_btn');" class="pt"></textarea>
 					<!--{else}-->
 						<div class="pt hm">{lang login_to_comment} <a href="member.php?mod=logging&action=login" onclick="showWindow('login', this.href)" class="xi2">{lang login}</a> | <a href="member.php?mod={$_G[setting][regname]}" class="xi2">$_G['setting']['reglinkname']</a></div>
@@ -118,7 +118,7 @@
 		</script>
 		<!--{/if}-->
 <script type="text/javascript">
-var elems = selector('div[class~=magicflicker]'); 
+var elems = selector('div[class~=magicflicker]');
 for(var i=0; i<elems.length; i++){
 	magicColor(elems[i]);
 }

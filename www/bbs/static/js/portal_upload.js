@@ -1,8 +1,8 @@
 /*
-	[Discuz!] (C)2001-2009 Comsenz Inc.
+	[Discuz!] (C)2001-2099 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: portal_upload.js 27926 2012-02-17 01:36:25Z svn_project_zhangjie $
+	$Id: portal_upload.js 32590 2013-02-22 09:42:48Z monkey $
 */
 
 var nowid = 0;
@@ -16,7 +16,7 @@ function addAttach() {
 
 	newnode.id = 'upload_' + id;
 	tags = newnode.getElementsByTagName('input');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].name == 'attach') {
 			tags[i].id = 'attach_' + id;
 			tags[i].name = 'attach';
@@ -25,7 +25,7 @@ function addAttach() {
 		}
 	}
 	tags = newnode.getElementsByTagName('span');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].id == 'localfile') {
 			tags[i].id = 'localfile_' + id;
 		}
@@ -59,9 +59,6 @@ function insertAttach(id) {
 function deleteAttach(attachid, url) {
 	ajaxget(url);
 	$('attach_list_' + attachid).style.display = 'none';
-	if($('setconver' + attachid).checked) {
-		$('conver').value = '';
-	}
 }
 
 function setConver(attach) {

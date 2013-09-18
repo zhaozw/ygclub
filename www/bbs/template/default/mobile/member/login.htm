@@ -1,4 +1,4 @@
-<!--{subtemplate common/header}-->
+<!--{template common/header}-->
 {eval $loginhash = 'L'.random(4);}
 <div class="box"><a href="forum.php">{lang return_forum}</a><span class="pipe">|</span><a href="javascript:history.back();" onclick="javascript:history.back();" title="{lang goback}" >{lang goback}</a></div>
 <div class="bm mtn">
@@ -10,7 +10,9 @@
 	<p>
 		<select name="fastloginfield" id="fastloginfield_{$loginhash}" >
 		<option value="username">{lang username}</option>
+		<!--{if getglobal('setting/uidlogin')}-->
 		<option value="uid">UID</option>
+		<!--{/if}-->
 		<option value="email">Email</option>
 		</select>
 		<input type="text" name="username" id="username_{$loginhash}" class="txt" />
@@ -48,19 +50,7 @@
 </div>
 
 <!--{if $_G['setting']['pwdsafety']}-->
-<script type="text/javascript">
-<!--
-var pwmd5log = new Array();
-function pwmd5() {
-	numargs = pwmd5.arguments.length;
-	for(var i = 0; i < numargs; i++) {
-		if(!pwmd5log[pwmd5.arguments[i]] || $(pwmd5.arguments[i]).value.length != 32) {
-			pwmd5log[pwmd5.arguments[i]] = $(pwmd5.arguments[i]).value = hex_md5($(pwmd5.arguments[i]).value);
-		}
-	}
-}
-//-->
-</script>
+	<script type="text/javascript" src="{$_G['setting']['jspath']}md5.js?{VERHASH}" reload="1"></script>
 <!--{/if}-->
 <!--{eval updatesession();}-->
-<!--{subtemplate common/footer}-->
+<!--{template common/footer}-->

@@ -19,9 +19,11 @@ include loadarchiver('common/header');
 		<?php endif; ?>
 		<?php echo lang('forum/archiver', 'post_time') . ' ' . $post['dateline']; ?>
 	</p>
-	<h3><?php echo $post['subject']; ?></h3>
 	<?php if($_G['forum_threadpay']): include template('forum/viewthread_pay'); ?>
-	<?php elseif(!($_G['setting']['bannedmessages'] & 1 && (($post['authorid'] && !$post['username']) || ($post['groupid'] == 4 || $post['groupid'] == 5)) || $post['status'] & 1)): ?>
+	<?php elseif(!$_G['forum']['ismoderator'] && $_G['setting']['bannedmessages'] & 1 && (($post['authorid'] && !$post['username']) || ($_G['thread']['digest'] == 0 && ($post['groupid'] == 4 || $post['groupid'] == 5 || $post['memberstatus'] == '-1')))): ?>
+	<?php elseif($post['status'] & 1): ?>
+	<?php else: ?>
+		<h3><?php echo $post['subject']; ?></h3>
 		<?php echo archivermessage($post['message']); ?>
 	<?php endif; ?>
 	<?php endforeach; ?>
@@ -37,11 +39,14 @@ include loadarchiver('common/header');
 <?php include loadarchiver('common/footer');
 
 function archivermessage($message) {
+	if(strpos($message, '[/password]') !== FALSE) {
+		return '';
+	}
 	return nl2br(preg_replace(
-			array('/&amp;(#\d{3,5};)/', "/\[hide=?\d*\](.*?)\[\/hide\]/is", "/\[\/?\w+=?.*?\]/"),
+			array('/&amp;(#\d{3,5};)/', "/\[hide=?\d*\](.*?)\[\/hide\]/is", "/\[postbg\]\s*([^\[\<\r\n;'\"\?\(\)]+?)\s*\[\/postbg\]/is", "/\[\/?\w+=?.*?\]/"),
 			array('&\\1','<b>**** Hidden Message *****</b>',''),
 		str_replace(
-			array('&', '"', '<', '>', "\t", '   ', '  '),
+			array('&', '"', '<', '>', "\t", '   ', '', '  '),
 			array('&amp;', '&quot;', '&lt;', '&gt;', '&nbsp; &nbsp; &nbsp; &nbsp; ', '&nbsp; &nbsp;', '&nbsp;&nbsp;'),
 		$message)));
 }

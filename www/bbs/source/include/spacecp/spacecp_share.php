@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: spacecp_share.php 31895 2012-10-23 02:22:16Z zhengqingpeng $
+ *      $Id: spacecp_share.php 33291 2013-05-22 05:59:13Z nemohou $
  */
 
 if(!defined('IN_DISCUZ')) {
@@ -25,16 +25,14 @@ if($_GET['op'] == 'delete') {
 	}
 
 	if($sid) {
-		$query = DB::query("SELECT * FROM ".DB::table('home_share')." WHERE sid='$sid'");
-		if(!$share = DB::fetch($query)) {
+		if(!$share = C::t('home_share')->fetch($sid)) {
 			showmessage('share_does_not_exist');
 		}
 	}
 
 	if(submitcheck('hotsubmit')) {
-		$_POST['hot'] = intval($_POST['hot']);
-		DB::update('home_share', array('hot'=>$_POST['hot']), array('sid'=>$sid));
-		DB::update('home_feed', array('hot'=>$_POST['hot']), array('id'=>$sid, 'idtype'=>'sid'));
+		C::t('home_share')->update($sid, array('hot'=>$_POST['hot']));
+		C::t('home_feed')->update($sid, array('hot'=>$_POST['hot']), 'sid');
 
 		showmessage('do_success', dreferer());
 	}
@@ -42,7 +40,7 @@ if($_GET['op'] == 'delete') {
 } else {
 
 
-	if(!checkperm('allowshare')) {
+	if(!checkperm('allowshare') || !helper_access::check_module('share')) {
 		showmessage('no_privilege_share');
 	}
 
@@ -64,7 +62,7 @@ if($_GET['op'] == 'delete') {
 
 			$feed_hash_data = "uid{$id}";
 
-			$tospace = getspace($id);
+			$tospace = getuserbyuid($id);
 			if(empty($tospace)) {
 				showmessage('space_does_not_exist');
 			}
@@ -95,10 +93,11 @@ if($_GET['op'] == 'delete') {
 
 			$feed_hash_data = "blogid{$id}";
 
-			$query = DB::query("SELECT b.*,bf.pic,bf.message,bf.hotuser FROM ".DB::table('home_blog')." b
-				LEFT JOIN ".DB::table('home_blogfield')." bf ON bf.blogid=b.blogid
-				WHERE b.blogid='$id'");
-			if(!$blog = DB::fetch($query)) {
+			$blog = array_merge(
+				C::t('home_blog')->fetch($id),
+				C::t('home_blogfield')->fetch($id)
+			);
+			if(!$blog) {
 				showmessage('blog_does_not_exist');
 			}
 			if(in_array($blog['status'], array(1, 2))) {
@@ -117,7 +116,7 @@ if($_GET['op'] == 'delete') {
 			$arr['body_data'] = array(
 			'subject' => "<a href=\"home.php?mod=space&uid=$blog[uid]&do=blog&id=$blog[blogid]\">$blog[subject]</a>",
 			'username' => "<a href=\"home.php?mod=space&uid=$blog[uid]\">".$blog['username']."</a>",
-			'message' => getstr($blog['message'], 150, 0, 1, 0, -1)
+			'message' => getstr($blog['message'], 150, 0, 0, 0, -1)
 			);
 			if($blog['pic']) {
 				$arr['image'] = pic_cover_get($blog['pic'], $blog['picflag']);
@@ -134,8 +133,7 @@ if($_GET['op'] == 'delete') {
 
 			$feed_hash_data = "albumid{$id}";
 
-			$query = DB::query("SELECT * FROM ".DB::table('home_album')." WHERE albumid='$id'");
-			if(!$album = DB::fetch($query)) {
+			if(!$album = C::t('home_album')->fetch($id)) {
 				showmessage('album_does_not_exist');
 			}
 			if($album['friend']) {
@@ -163,15 +161,13 @@ if($_GET['op'] == 'delete') {
 		case 'pic':
 
 			$feed_hash_data = "picid{$id}";
-
-			$query = DB::query("SELECT album.username, album.albumid, album.albumname, album.friend, pf.*, pic.*
-				FROM ".DB::table('home_pic')." pic
-				LEFT JOIN ".DB::table('home_picfield')." pf ON pf.picid=pic.picid
-				LEFT JOIN ".DB::table('home_album')." album ON album.albumid=pic.albumid
-				WHERE pic.picid='$id'");
-			if(!$pic = DB::fetch($query)) {
+			$pic = C::t('home_pic')->fetch($id);
+			if(!$pic) {
 				showmessage('image_does_not_exist');
 			}
+			$picfield = C::t('home_picfield')->fetch($id);
+			$album = C::t('home_album')->fetch($pic['albumid']);
+			$pic = array_merge($pic, $picfield, $album);
 			if(in_array($pic['status'], array(1, 2))) {
 				showmessage('moderate_pic_not_share');
 			}
@@ -191,7 +187,7 @@ if($_GET['op'] == 'delete') {
 			$arr['body_data'] = array(
 			'albumname' => "<a href=\"home.php?mod=space&uid=$pic[uid]&do=album&id=$pic[albumid]\">$pic[albumname]</a>",
 			'username' => "<a href=\"home.php?mod=space&uid=$pic[uid]\">".$pic['username']."</a>",
-			'title' => getstr($pic['title'], 100, 0, 1, 0, -1)
+			'title' => getstr($pic['title'], 100, 0, 0, 0, -1)
 			);
 			$arr['image'] = pic_get($pic['filepath'], 'album', $pic['thumb'], $pic['remote']);
 			$arr['image_link'] = "home.php?mod=space&uid=$pic[uid]&do=album&picid=$pic[picid]";
@@ -209,26 +205,24 @@ if($_GET['op'] == 'delete') {
 
 			$actives = array('share' => ' class="active"');
 
-			$thread = DB::fetch(DB::query("SELECT * FROM ".DB::table('forum_thread')." WHERE tid='$id'"));
+			$thread = C::t('forum_thread')->fetch($id);
 			if(in_array($thread['displayorder'], array(-2, -3))) {
 				showmessage('moderate_thread_not_share');
 			}
-			$posttable = getposttable();
-			$post = DB::fetch(DB::query("SELECT * FROM ".DB::table($posttable)." WHERE tid='$id' AND first='1'"));
-
+			require_once libfile('function/post');
+			$post = C::t('forum_post')->fetch_threadpost_by_tid_invisible($id);
 			$arr['title_template'] = lang('spacecp', 'share_thread');
 			$arr['body_template'] = '<b>{subject}</b><br>{author}<br>{message}';
 			$attachment = !preg_match("/\[hide=?\d*\](.*?)\[\/hide\]/is", $post['message'], $a) && preg_match("/\[attach\]\d+\[\/attach\]/i", $a[1]);
-			$language = lang('forum/misc');
-			$post['message'] = preg_replace(array($language['post_edithtml_regexp'],$language['post_editnobbcode_regexp'],$language['post_edit_regexp']), '', $post['message']);
+			$post['message'] = messagecutstr($post['message']);
 			$arr['body_data'] = array(
 				'subject' => "<a href=\"forum.php?mod=viewthread&tid=$id\">$thread[subject]</a>",
 				'author' => "<a href=\"home.php?mod=space&uid=$thread[authorid]\">$thread[author]</a>",
-				'message' => getstr($post['message'], 150, 0, 1, 0, -1)
+				'message' => getstr($post['message'], 150, 0, 0, 0, -1)
 			);
 			$arr['itemid'] = $id;
-			$arr['fromuid'] = $thread['uid'];
-			$attachment = $attachment ? DB::fetch_first('SELECT attachment, isimage, thumb, remote FROM '.DB::table(getattachtablebytid($id))." WHERE tid='$id' AND isimage IN ('1', '-1') LIMIT 0,1") : false;
+			$arr['fromuid'] = $thread['authorid'];
+			$attachment = $attachment ? C::t('forum_attachment_n')->fetch_max_image('tid:'.$id, 'tid', $id) : false;
 			if($attachment) {
 				$arr['image'] = pic_get($attachment['attachment'], 'forum', $attachment['thumb'], $attachment['remote'], 1);
 				$arr['image_link'] = "forum.php?mod=viewthread&tid=$id";
@@ -243,30 +237,32 @@ if($_GET['op'] == 'delete') {
 
 			$feed_hash_data = "articleid{$id}";
 
-			$query = DB::query("SELECT * FROM ".DB::table('portal_article_title')." WHERE aid='$id'");
-			if(!$article = DB::fetch($query)) {
+			$article = C::t('portal_article_title')->fetch($id);
+			if(!$article) {
 				showmessage('article_does_not_exist');
 			}
 			if(in_array($article['status'], array(1, 2))) {
 				showmessage('moderate_article_not_share');
 			}
 
+			require_once libfile('function/portal');
+			$article_url = fetch_article_url($article);
 			$arr['itemid'] = $id;
 			$arr['fromuid'] = $article['uid'];
 			$arr['title_template'] = lang('spacecp', 'share_article');
 			$arr['body_template'] = '<b>{title}</b><br>{username}<br>{summary}';
 			$arr['body_data'] = array(
-			'title' => "<a href=\"portal.php?mod=view&aid=$article[aid]\">$article[title]</a>",
+			'title' => "<a href=\"$article_url\">$article[title]</a>",
 			'username' => "<a href=\"home.php?mod=space&uid=$article[uid]\">".$article['username']."</a>",
-			'summary' => getstr($article['summary'], 150, 0, 1, 0, -1)
+			'summary' => getstr($article['summary'], 150, 0, 0, 0, -1)
 			);
 			if($article['pic']) {
 				$arr['image'] = pic_get($article['pic'], 'portal', $article['thumb'], $article['remote'], 1, 1);
-				$arr['image_link'] = "portal.php?mod=view&aid=$article[aid]";
+				$arr['image_link'] = $article_url;
 			}
 			$note_uid = $article['uid'];
 			$note_message = 'share_article';
-			$note_values = array('url'=>"portal.php?mod=view&aid=$article[aid]", 'subject'=>$article['title'], 'from_id' => $id, 'from_idtype' => 'aid');
+			$note_values = array('url'=>$article_url, 'subject'=>$article['title'], 'from_id' => $id, 'from_idtype' => 'aid');
 
 			break;
 		default:
@@ -291,7 +287,7 @@ if($_GET['op'] == 'delete') {
 
 		if($type == 'link') {
 			$link = dhtmlspecialchars(trim($_POST['link']));
-			preg_match("/((https?){1}:\/\/|www\.)[^\[\"']+/i", $link, $matches);
+			preg_match("/((https?|ftp|gopher|news|telnet|rtsp|mms|callto|bctp|thunder|qqdl|synacast){1}:\/\/|www\.)[^\[\"']+/i", $link, $matches);
 			$link = $matches[0];
 			if($link) {
 				if(!preg_match("/^(http|ftp|https|mms)\:\/\/.{4,300}$/i", $link)) $link = '';
@@ -299,14 +295,14 @@ if($_GET['op'] == 'delete') {
 			if(empty($link)) {
 				showmessage('url_incorrect_format');
 			}
+
 			$arr['itemid'] = '0';
 			$arr['fromuid'] = '0';
 			$arr['title_template'] = lang('spacecp', 'share_link');
 			$arr['body_template'] = '{link}';
-
 			$link_text = sub_url($link, 45);
 
-			$arr['body_data'] = array('link'=>"<a href=\"$link\" target=\"_blank\">$link_text</a>", 'data'=>$link);
+			$arr['body_data'] = array('link'=>"<a href=\"$link\" target=\"_blank\">".$link_text."</a>", 'data'=>$link);
 			$parseLink = parse_url($link);
 			require_once libfile('function/discuzcode');
 			$flashvar = parseflv($link);
@@ -317,6 +313,10 @@ if($_GET['op'] == 'delete') {
 				);
 			}
 			if(!empty($flashvar)) {
+				$title = geturltitle($link);
+				if($title) {
+					$arr['body_data'] = array('link'=>"<a href=\"$link\" target=\"_blank\">".$title."</a>", 'data'=>$link);
+				}
 				$arr['title_template'] = lang('spacecp', 'share_video');
 				$type = 'video';
 				$arr['body_data']['flashvar'] = $flashvar['flv'];
@@ -335,13 +335,15 @@ if($_GET['op'] == 'delete') {
 			}
 		}
 
-		if($_G['gp_iscomment'] && $_POST['general'] && $commentcable[$type] && $id) {
+		if($_GET['iscomment'] && $_POST['general'] && $commentcable[$type] && $id) {
+
+			$_POST['general'] = censor($_POST['general']);
 
 			$currenttype = $commentcable[$type];
 			$currentid = $id;
 
 			if($currenttype == 'article') {
-				$article = DB::fetch_first("SELECT * FROM ".DB::table('portal_article_title')." WHERE aid='$currentid'");
+				$article = C::t('portal_article_title')->fetch($currentid);
 				include_once libfile('function/portal');
 				loadcache('portalcategory');
 				$cat = $_G['cache']['portalcategory'][$article['catid']];
@@ -359,25 +361,30 @@ if($_GET['op'] == 'delete') {
 			}
 
 			if($currenttype == 'thread') {
-				$_G['setting']['seccodestatus'] = 0;
-				$_G['setting']['secqaa']['status'] = 0;
-
-				$_POST['replysubmit'] = true;
-				$_GET['tid'] = $currentid;
-				$_G['gp_action'] = 'reply';
-				$_G['gp_message'] = $_POST['general'];
 				if($commentcable[$type] == 'article') {
-					$_POST['portal_referer'] = 'portal.php?mod=view&aid='.$id;
+					$_POST['portal_referer'] = $article_url ? $article_url : 'portal.php?mod=view&aid='.$id;
 				}
 
-				include_once libfile('function/forum');
-				require_once libfile('function/post');
-				loadforum();
 
-				$inspacecpshare = 1;
+				$modpost = C::m('forum_post', $currentid);
 
-				include_once libfile('forum/post', 'module');
-				$redirecturl = $url ? $url : '';
+
+				$params = array(
+					'subject' => '',
+					'message' => $_POST['general'],
+				);
+
+				$modpost->newreply($params);
+
+				if($_POST['portal_referer']) {
+					$redirecturl = $_POST['portal_referer'];
+				} else {
+					if($modnewreplies) {
+						$redirecturl = "forum.php?mod=viewthread&tid=".$currentid;
+					} else {
+						$redirecturl = "forum.php?mod=viewthread&tid=".$currentid."&pid=".$modpost->pid."&page=".$modpost->param('page')."&extra=".$extra."#pid".$modpost->pid;
+					}
+				}
 				$showmessagecontent = ($modnewreplies && $commentcable[$type] != 'article') ? 'do_success_thread_share_mod' : '';
 
 			} elseif($currenttype == 'article') {
@@ -414,7 +421,7 @@ if($_GET['op'] == 'delete') {
 				if($waittime > 0) {
 					showmessage('operating_too_fast', '', array('waittime' => $waittime), array('return' => true));
 				}
-				$message = getstr($_POST['general'], 0, 1, 1, 2);
+				$message = getstr($_POST['general'], 0, 0, 0, 2);
 				if(strlen($message) < 2) {
 					showmessage('content_is_too_short', '', array(), array('return' => true));
 				}
@@ -431,7 +438,7 @@ if($_GET['op'] == 'delete') {
 			$magvalues['type'] = $commentcable[$type];
 		}
 
-		$arr['body_general'] = getstr($_POST['general'], 150, 1, 1, 1);
+		$arr['body_general'] = getstr($_POST['general'], 150, 0, 0, 1);
 		$arr['body_general'] = censor($arr['body_general']);
 		if(censormod($arr['body_general']) || $_G['group']['allowsharemod']) {
 			$arr['status'] = 1;
@@ -460,31 +467,28 @@ if($_GET['op'] == 'delete') {
 
 		$arr['body_data'] = serialize($arr['body_data']);
 
-		$setarr = daddslashes($arr);
-		$sid = DB::insert('home_share', $setarr, 1);
+		$sid = C::t('home_share')->insert($arr, true);
 
 		switch($type) {
 			case 'space':
-				DB::query("UPDATE ".DB::table('common_member_status')." SET sharetimes=sharetimes+1 WHERE uid='$id'");
+				C::t('common_member_status')->increase($id, array('sharetimes' => 1));
 				break;
 			case 'blog':
-				DB::query("UPDATE ".DB::table('home_blog')." SET sharetimes=sharetimes+1 WHERE blogid='$id'");
+				C::t('home_blog')->increase($id, null, array('sharetimes' => 1));
 				break;
 			case 'album':
-				DB::query("UPDATE ".DB::table('home_album')." SET sharetimes=sharetimes+1 WHERE albumid='$id'");
+				C::t('home_album')->update_num_by_albumid($id, 1, 'sharetimes');
 				break;
 			case 'pic':
-				DB::query("UPDATE ".DB::table('home_pic')." SET sharetimes=sharetimes+1 WHERE picid='$picid'");
+				C::t('home_pic')->update_sharetimes($id);
 				break;
 			case 'thread':
-				DB::query("UPDATE ".DB::table('forum_thread')." SET sharetimes=sharetimes+1 WHERE tid='$id'");
-				if($_G['setting']['heatthread']['type'] == 2) {
-					require_once libfile('function/forum');
-					update_threadpartake($id);
-				}
+				C::t('forum_thread')->increase($id, array('sharetimes' => 1));
+				require_once libfile('function/forum');
+				update_threadpartake($id);
 				break;
 			case 'article':
-				DB::query("UPDATE ".DB::table('portal_article_count')." SET sharetimes=sharetimes+1 WHERE aid='$id'");
+				C::t('portal_article_count')->increase($id, array('sharetimes' => 1));
 				break;
 		}
 
@@ -493,7 +497,7 @@ if($_GET['op'] == 'delete') {
 			manage_addnotify('verifyshare');
 		}
 
-		if($type == 'link' || !DB::result_first("SELECT COUNT(*) FROM ".DB::table('home_share')." WHERE uid='$_G[uid]' AND itemid='$id' AND type='$type'")) {
+		if($type == 'link' || !(C::t('home_share')->count_by_uid_itemid_type($_G['uid'], $id ? $id : '', $type ? $type : ''))) {
 			include_once libfile('function/stat');
 			updatestat('share');
 		}
@@ -525,11 +529,11 @@ if($_GET['op'] == 'delete') {
 }
 
 if($type != 'link') {
-	if(DB::result_first("SELECT COUNT(*) FROM ".DB::table('home_share')." WHERE uid='$_G[uid]' AND itemid='$id' AND type='$type'")) {
+	if((C::t('home_share')->count_by_uid_itemid_type($_G['uid'], $id ? $id : '', $type ? $type : ''))) {
 		showmessage('spacecp_share_repeat');
 	}
 }
 
-$share_count = DB::result_first("SELECT COUNT(*) FROM ".DB::table('home_share')." WHERE itemid='$id' AND type='$type'");
+$share_count = C::t('home_share')->count_by_uid_itemid_type(0, $id ? $id : '', $type ? $type : '');
 include template('home/spacecp_share');
 ?>

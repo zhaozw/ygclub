@@ -1,8 +1,8 @@
 /*
-	[Discuz!] (C)2001-2009 Comsenz Inc.
+	[Discuz!] (C)2001-2099 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: forum.js 22522 2011-05-11 03:12:47Z monkey $
+	$Id: forum.js 33082 2013-04-18 11:13:53Z zhengqingpeng $
 */
 
 function saveData(ignoreempty) {
@@ -64,16 +64,7 @@ function saveData(ignoreempty) {
 		return;
 	}
 
-	saveUserdata('forum', data);
-}
-
-function switchFullMode() {
-	var obj = $('postform') && (($('fwin_newthread') && $('fwin_newthread').style.display == '') || ($('fwin_reply') && $('fwin_reply').style.display == '')) ? $('postform') : $('fastpostform');
-	if(obj && obj.message.value != '') {
-		saveData();
-	}
-	ajaxget('forum.php?mod=ajax&action=editor&cedit=yes' + (!fid ? '' : '&fid=' + fid), 'fastposteditor');
-	return false;
+	saveUserdata('forum_'+discuz_uid, data);
 }
 
 function fastUload() {
@@ -104,6 +95,9 @@ function sidebar_collapse(lang) {
 }
 
 function keyPageScroll(e, prev, next, url, page) {
+	if(loadUserdata('is_blindman')) {
+		return true;
+	}
 	e = e ? e : window.event;
 	var tagname = BROWSER.ie ? e.srcElement.tagName : e.target.tagName;
 	if(tagname == 'INPUT' || tagname == 'TEXTAREA') return;
@@ -215,7 +209,7 @@ function fastpostvalidate(theform, noajaxpost) {
 			return false;
 		}
 	}
-	if(theform.message.value == '' && theform.subject.value == '') {
+	if(theform.message.value == '' || theform.subject.value == '') {
 		s = '抱歉，您尚未输入标题或内容';
 		theform.message.focus();
 	} else if(mb_strlen(theform.subject.value) > 80) {
@@ -232,6 +226,7 @@ function fastpostvalidate(theform, noajaxpost) {
 		return false;
 	}
 	$('fastpostsubmit').disabled = true;
+	theform.message.value = theform.message.value.replace(/([^>=\]"'\/]|^)((((https?|ftp):\/\/)|www\.)([\w\-]+\.)*[\w\-\u4e00-\u9fa5]+\.([\.a-zA-Z0-9]+|\u4E2D\u56FD|\u7F51\u7EDC|\u516C\u53F8)((\?|\/|:)+[\w\.\/=\?%\-&~`@':+!]*)+\.(jpg|gif|png|bmp))/ig, '$1[img]$2[/img]');
 	theform.message.value = parseurl(theform.message.value);
 	if(!noajaxpost) {
 		ajaxpost('fastpostform', 'fastpostreturn', 'fastpostreturn', 'onerror', $('fastpostsubmit'));
@@ -255,13 +250,13 @@ function errorhandle_fastnewpost() {
 }
 
 function atarget(obj) {
-	obj.target = getcookie('atarget') ? '_blank' : '';
+	obj.target = getcookie('atarget') > 0 ? '_blank' : '';
 }
 
 function setatarget(v) {
 	$('atarget').className = 'y atarget_' + v;
-	$('atarget').onclick = function() {setatarget(v ? 0 : 1);};
-	setcookie('atarget', v, (v ? 2592000 : -1));
+	$('atarget').onclick = function() {setatarget(v == 1 ? -1 : 1);};
+	setcookie('atarget', v, 2592000);
 }
 
 function loadData(quiet, formobj) {
@@ -277,7 +272,7 @@ function loadData(quiet, formobj) {
 	};
 
 	var data = '';
-	data = loadUserdata('forum');
+	data = loadUserdata('forum_'+discuz_uid);
 	var formobj = !formobj ? $('postform') : formobj;
 
 	if(in_array((data = trim(data)), ['', 'null', 'false', null, false])) {
@@ -372,11 +367,7 @@ function checkForumnew(fid, lasttime) {
 	var x = new Ajax();
 	x.get('forum.php?mod=ajax&action=forumchecknew&fid=' + fid + '&time=' + lasttime + '&inajax=yes', function(s){
 		if(s > 0) {
-			if($('separatorline')) {
-				var table = $('separatorline').parentNode;
-			} else {
-				var table = $('forum_' + fid);
-			}
+			var table = $('separatorline').parentNode;
 			if(!isUndefined(checkForumnew_handle)) {
 				clearTimeout(checkForumnew_handle);
 			}
@@ -460,4 +451,237 @@ function leftside(id) {
 	if(id == 'lf_fav') {
 		setcookie('leftsidefav', $(id).className == 'a' ? 0 : 1, 2592000);
 	}
+}
+var DTimers = new Array();
+var DItemIDs = new Array();
+var DTimers_exists = false;
+function settimer(timer, itemid) {
+	if(timer && itemid) {
+		DTimers.push(timer);
+		DItemIDs.push(itemid);
+	}
+	if(!DTimers_exists) {
+		setTimeout("showtime()", 1000);
+		DTimers_exists = true;
+	}
+}
+function showtime() {
+	for(i=0; i<=DTimers.length; i++) {
+		if(DItemIDs[i]) {
+			if(DTimers[i] == 0) {
+				$(DItemIDs[i]).innerHTML = '已结束';
+				DItemIDs[i] = '';
+				continue;
+			}
+			var timestr = '';
+			var timer_day = Math.floor(DTimers[i] / 86400);
+			var timer_hour = Math.floor((DTimers[i] % 86400) / 3600);
+			var timer_minute = Math.floor(((DTimers[i] % 86400) % 3600) / 60);
+			var timer_second = (((DTimers[i] % 86400) % 3600) % 60);
+			if(timer_day > 0) {
+				timestr += timer_day + '天';
+			}
+			if(timer_hour > 0) {
+				timestr += timer_hour + '小时'
+			}
+			if(timer_minute > 0) {
+				timestr += timer_minute + '分'
+			}
+			if(timer_second > 0) {
+				timestr += timer_second + '秒'
+			}
+			DTimers[i] = DTimers[i] - 1;
+			$(DItemIDs[i]).innerHTML = timestr;
+		}
+	}
+	setTimeout("showtime()", 1000);
+}
+function fixed_top_nv(eleid, disbind) {
+	this.nv = eleid && $(eleid) || $('nv');
+	this.openflag = this.nv && BROWSER.ie != 6;
+	this.nvdata = {};
+	this.init = function (disattachevent) {
+		if(this.openflag) {
+			if(!disattachevent) {
+				var obj = this;
+				_attachEvent(window, 'resize', function(){obj.reset();obj.init(1);obj.run();});
+				var switchwidth = $('switchwidth');
+				if(switchwidth) {
+					_attachEvent(switchwidth, 'click', function(){obj.reset();obj.openflag=false;});
+				}
+			}
+
+			var next = this.nv;
+			try {
+				while((next = next.nextSibling).nodeType != 1 || next.style.display === 'none') {}
+				this.nvdata.next = next;
+				this.nvdata.height = parseInt(this.nv.offsetHeight, 10);
+				this.nvdata.width = parseInt(this.nv.offsetWidth, 10);
+				this.nvdata.left = this.nv.getBoundingClientRect().left - document.documentElement.clientLeft;
+				this.nvdata.position = this.nv.style.position;
+				this.nvdata.opacity = this.nv.style.opacity;
+			} catch (e) {
+				this.nvdata.next = null;
+			}
+		}
+	};
+
+	this.run = function () {
+		var fixedheight = 0;
+		if(this.openflag && this.nvdata.next){
+			var nvnexttop = document.body.scrollTop || document.documentElement.scrollTop;
+			var dofixed = nvnexttop !== 0 && document.documentElement.clientHeight >= 15 && this.nvdata.next.getBoundingClientRect().top - this.nvdata.height < 0;
+			if(dofixed) {
+				if(this.nv.style.position != 'fixed') {
+					this.nv.style.borderLeftWidth = '0';
+					this.nv.style.borderRightWidth = '0';
+					this.nv.style.height = this.nvdata.height + 'px';
+					this.nv.style.width = this.nvdata.width + 'px';
+					this.nv.style.top = '0';
+					this.nv.style.left = this.nvdata.left + 'px';
+					this.nv.style.position = 'fixed';
+					this.nv.style.zIndex = '199';
+					this.nv.style.opacity = 0.85;
+				}
+			} else {
+				if(this.nv.style.position != this.nvdata.position) {
+					this.reset();
+				}
+			}
+			if(this.nv.style.position == 'fixed') {
+				fixedheight = this.nvdata.height;
+			}
+		}
+		return fixedheight;
+	};
+	this.reset = function () {
+		if(this.nv) {
+			this.nv.style.position = this.nvdata.position;
+			this.nv.style.borderLeftWidth = '';
+			this.nv.style.borderRightWidth = '';
+			this.nv.style.height = '';
+			this.nv.style.width = '';
+			this.nv.style.opacity = this.nvdata.opacity;
+		}
+	};
+	if(!disbind && this.openflag) {
+		this.init();
+		_attachEvent(window, 'scroll', this.run);
+	}
+}
+var previewTbody = null, previewTid = null, previewDiv = null;
+function previewThread(tid, tbody) {
+	if(!$('threadPreviewTR_'+tid)) {
+		appendscript(JSPATH + 'forum_viewthread.js?' + VERHASH);
+
+		newTr = document.createElement('tr');
+		newTr.id = 'threadPreviewTR_'+tid;
+		newTr.className = 'threadpre';
+		$(tbody).appendChild(newTr);
+		newTd = document.createElement('td');
+		newTd.colSpan = listcolspan;
+		newTd.className = 'threadpretd';
+		newTr.appendChild(newTd);
+		newTr.style.display = 'none';
+
+		previewTbody = tbody;
+		previewTid = tid;
+
+		if(BROWSER.ie) {
+			previewDiv = document.createElement('div');
+			previewDiv.id = 'threadPreview_'+tid;
+			previewDiv.style.id = 'none';
+			var x = Ajax();
+			x.get('forum.php?mod=viewthread&tid='+tid+'&inajax=1&from=preview', function(ret) {
+				var evaled = false;
+				if(ret.indexOf('ajaxerror') != -1) {
+					evalscript(ret);
+					evaled = true;
+				}
+				previewDiv.innerHTML = ret;
+				newTd.appendChild(previewDiv);
+				if(!evaled) evalscript(ret);
+				newTr.style.display = '';
+			});
+		} else {
+			newTd.innerHTML += '<div id="threadPreview_'+tid+'"></div>';
+			ajaxget('forum.php?mod=viewthread&tid='+tid+'&from=preview', 'threadPreview_'+tid, null, null, null, function() {newTr.style.display = '';});
+		}
+	} else {
+		$(tbody).removeChild($('threadPreviewTR_'+tid));
+		previewTbody = previewTid = null;
+	}
+}
+
+function hideStickThread(tid) {
+	var pre = 'stickthread_';
+	var tids = (new Function("return ("+(loadUserdata('sticktids') || '[]')+")"))();
+	var format = function (data) {
+		var str = '{';
+		for (var i in data) {
+			if(data[i] instanceof Array) {
+				str += i + ':' + '[';
+				for (var j = data[i].length - 1; j >= 0; j--) {
+					str += data[i][j] + ',';
+				};
+				str = str.substr(0, str.length -1);
+				str += '],';
+			}
+		}
+		str = str.substr(0, str.length -1);
+		str += '}';
+		return str;
+	};
+	if(!tid) {
+		if(tids.length > 0) {
+			for (var i = tids.length - 1; i >= 0; i--) {
+				var ele = $(pre+tids[i]);
+				if(ele) {
+					ele.parentNode.removeChild(ele);
+				}
+			};
+		}
+	} else {
+		var eletbody = $(pre+tid);
+		if(eletbody) {
+			eletbody.parentNode.removeChild(eletbody);
+			tids.push(tid);
+			saveUserdata('sticktids', '['+tids.join(',')+']');
+		}
+	}
+	var clearstickthread = $('clearstickthread');
+	if(clearstickthread) {
+		if(tids.length > 0) {
+			$('clearstickthread').style.display = '';
+		} else {
+			$('clearstickthread').style.display = 'none';
+		}
+	}
+	var separatorline = $('separatorline');
+	if(separatorline) {
+		try {
+			if(typeof separatorline.previousElementSibling === 'undefined') {
+				var findele = separatorline.previousSibling;
+				while(findele && findele.nodeType != 1){
+					findele = findele.previousSibling;
+				}
+				if(findele === null) {
+					separatorline.parentNode.removeChild(separatorline);
+				}
+			} else {
+				if(separatorline.previousElementSibling === null) {
+					separatorline.parentNode.removeChild(separatorline);
+				}
+			}
+		} catch(e) {
+		}
+	}
+}
+function viewhot() {
+	var obj = $('hottime');
+	window.location.href = "forum.php?mod=forumdisplay&filter=hot&fid="+obj.getAttribute('fid')+"&time="+obj.value;
+}
+function clearStickThread () {
+	saveUserdata('sticktids', '[]');
+	location.reload();
 }

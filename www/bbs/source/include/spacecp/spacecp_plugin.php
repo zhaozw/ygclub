@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: spacecp_plugin.php 22435 2011-05-09 02:09:38Z monkey $
+ *      $Id: spacecp_plugin.php 33364 2013-06-03 02:30:46Z andyzheng $
  */
 
 if(!defined('IN_DISCUZ')) {
@@ -12,17 +12,14 @@ if(!defined('IN_DISCUZ')) {
 }
 
 $pluginkey = 'spacecp'.($op ? '_'.$op : '');
-$navtitle = $_G['setting']['plugins'][$pluginkey][$_G['gp_id']]['name'];
-
-include pluginmodule($_G['gp_id'], $pluginkey);
+$navtitle = $_G['setting']['plugins'][$pluginkey][$_GET['id']]['name'];
+$_GET['id'] = $_GET['id'] ? preg_replace("/[^A-Za-z0-9_:]/", '', $_GET['id']) : '';
+include pluginmodule($_GET['id'], $pluginkey);
 if(!$op || $op == 'credit') {
 	include template('home/spacecp_plugin');
 } elseif($op == 'profile') {
-	$result = DB::fetch_first("SELECT * FROM ".DB::table('common_setting')." WHERE skey='profilegroup'");
 	$defaultop = '';
-	if(!empty($result['svalue'])) {
-	    $profilegroup = unserialize($result['svalue']);
-	}
+	$profilegroup = C::t('common_setting')->fetch('profilegroup', true);
 	$operation = 'plugin';
 	include template('home/spacecp_profile');
 }

@@ -2,7 +2,7 @@
 	[Discuz!] (C)2001-2009 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: soso_smilies.js 84 2011-02-28 14:15:44Z yexinhao $
+	$Id: soso_smilies.js 32519 2013-02-04 08:21:44Z liudongdong $
 */
 
 var sosojs = document.createElement('script');
@@ -15,13 +15,17 @@ var sosolo = document.getElementsByTagName('script')[0];
 function bbcode2html_sososmilies(sososmilieid, getsrc) {
 	var imgsrc = '';
 	sososmilieid = String(sososmilieid);
-	var imgid = 'soso_' + sososmilieid;
 
-	if(sososmilieid.indexOf('_') == 0) {
+	if(sososmilieid.indexOf('_') >= 0) {
+		if (sososmilieid.indexOf('_') == 0) {
+			sososmilieid = sososmilieid.substr(1);
+		}
+		var imgid = 'soso__' + sososmilieid;
 		var realsmilieid = sososmilieid.substr(0, sososmilieid.length-2);
 		var serverid = sososmilieid.substr(sososmilieid.length-1);
-		imgsrc = "http://piccache"+serverid+".soso.com/face/"+realsmilieid;
+		imgsrc = "http://soso"+serverid+".gtimg.cn/sosopic_f/0/"+realsmilieid+"/0";
 	} else {
+		var imgid = 'soso_' + sososmilieid;
 		imgsrc = "http://cache.soso.com/img/img/"+sososmilieid+".gif";
 	}
 	if(!isUndefined(getsrc)) {
@@ -46,13 +50,14 @@ function sososmileycode(sososmilieid) {
 function sososmiliesurl2id(sosourl) {
 	var sososmilieid = '';
 	if(sosourl && sosourl.length > 30) {
-		var idindex = sosourl.lastIndexOf('/');
-		if(sosourl.indexOf('http://piccache') == 0) {
-			var serverid = sosourl.substr(15,1);
-			var realsmilieid = sosourl.substr(idindex+1);
-			sososmilieid = realsmilieid+'_'+serverid;
-		} else if(sosourl.indexOf('http://cache.soso.com') == 0) {
-			sososmilieid = sosourl.substring(idindex+1, sosourl.length-4);
+		var url = sosourl.substr(0, sosourl.lastIndexOf('/'));
+		var idindex = url.lastIndexOf('/');
+		if (sosourl.indexOf('http://soso') == 0) {
+			var serverid = url.substr(11, 1);
+			var realsmilieid = url.substr(idindex+1);
+			sososmilieid = '_'+realsmilieid+'_'+serverid;
+		} else if (sosourl.indexOf('http://cache.soso.com') == 0) {
+			sososmilieid = sosourl.substring(sosourl.lastIndexOf('/')+1, sosourl.length-4);
 		}
 		return sososmilieid;
 	}

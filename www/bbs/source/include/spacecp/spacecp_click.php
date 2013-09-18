@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: spacecp_click.php 22942 2011-06-07 01:54:42Z zhangguosheng $
+ *      $Id: spacecp_click.php 31313 2012-08-10 03:51:03Z zhangguosheng $
  */
 
 if(!defined('IN_DISCUZ')) {
@@ -25,29 +25,30 @@ if(empty($click)) {
 
 switch ($idtype) {
 	case 'picid':
-		$sql = "SELECT p.*, s.username, a.friend, pf.hotuser FROM ".DB::table('home_pic')." p
-			LEFT JOIN ".DB::table('home_picfield')." pf ON pf.picid=p.picid
-			LEFT JOIN ".DB::table('home_album')." a ON a.albumid=p.albumid
-			LEFT JOIN ".DB::table('common_member')." s ON s.uid=p.uid
-			WHERE p.picid='$id'";
-		$tablename = DB::table('home_pic');
+		$item = C::t('home_pic')->fetch($id);
+		if($item) {
+			$picfield = C::t('home_picfield')->fetch($id);
+			$album = C::t('home_album')->fetch($item['albumid']);
+			$item['hotuser'] = $picfield['hotuser'];
+			$item['friend'] = $album['friend'];
+			$item['username'] = $album['username'];
+		}
+		$tablename = 'home_pic';
 		break;
 	case 'aid':
-		$sql = "SELECT a.* FROM ".DB::table('portal_article_title')." a
-			LEFT JOIN ".DB::table('portal_article_content')." af ON af.aid=a.aid
-			WHERE a.aid='$id'";
-		$tablename = DB::table('portal_article_title');
+		$item = C::t('portal_article_title')->fetch($id);
+		$tablename = 'portal_article_title';
 		break;
 	default:
 		$idtype = 'blogid';
-		$sql = "SELECT b.*, bf.hotuser FROM ".DB::table('home_blog')." b
-			LEFT JOIN ".DB::table('home_blogfield')." bf ON bf.blogid=b.blogid
-			WHERE b.blogid='$id'";
-		$tablename = DB::table('home_blog');
+		$item = array_merge(
+			C::t('home_blog')->fetch($id),
+			C::t('home_blogfield')->fetch($id)
+		);
+		$tablename = 'home_blog';
 		break;
 }
-$query = DB::query($sql);
-if(!$item = DB::fetch($query)) {
+if(!$item) {
 	showmessage('click_item_error');
 }
 
@@ -65,8 +66,7 @@ if($_GET['op'] == 'add') {
 		showmessage('is_blacklist');
 	}
 
-	$query = DB::query("SELECT * FROM ".DB::table('home_clickuser')." WHERE uid='$space[uid]' AND id='$id' AND idtype='$idtype'");
-	if($value = DB::fetch($query)) {
+	if(C::t('home_clickuser')->count_by_uid_id_idtype($space[uid], $id, $idtype)) {
 		showmessage('click_have');
 	}
 
@@ -78,13 +78,12 @@ if($_GET['op'] == 'add') {
 		'clickid' => $clickid,
 		'dateline' => $_G['timestamp']
 	);
-	DB::insert('home_clickuser', $setarr);
+	C::t('home_clickuser')->insert($setarr);
 
-	DB::query("UPDATE $tablename SET click{$clickid}=click{$clickid}+1 WHERE $idtype='$id'");
+	C::t($tablename)->update_click($id, $clickid, 1);
 
 	hot_update($idtype, $id, $item['hotuser']);
 
-	$note_type = '';
 	$q_note = '';
 	$q_note_values = array();
 
@@ -98,7 +97,6 @@ if($_GET['op'] == 'add') {
 				'click' => $click['name']
 			);
 
-			$note_type = 'clickblog';
 			$q_note = 'click_blog';
 			$q_note_values = array(
 				'url'=>"home.php?mod=space&uid=$item[uid]&do=blog&id=$item[blogid]",
@@ -108,17 +106,18 @@ if($_GET['op'] == 'add') {
 			);
 			break;
 		case 'aid':
+			require_once libfile('function/portal');
+			$article_url = fetch_article_url($item);
 			$fs['title_template'] = 'feed_click_article';
 			$fs['title_data'] = array(
 				'touser' => "<a href=\"home.php?mod=space&uid=$item[uid]\">{$item[username]}</a>",
-				'subject' => "<a href=\"portal.php?mod=view&aid=$item[aid]\">$item[title]</a>",
+				'subject' => "<a href=\"$article_url\">$item[title]</a>",
 				'click' => $click['name']
 			);
 
-			$note_type = 'clickarticle';
 			$q_note = 'click_article';
 			$q_note_values = array(
-				'url'=>"portal.php?mod=view&aid=$item[aid]",
+				'url'=>$article_url,
 				'subject'=>$item['title'],
 				'from_id' => $item['aid'],
 				'from_idtype' => 'aid'
@@ -134,7 +133,6 @@ if($_GET['op'] == 'add') {
 			$fs['image_links'] = array("home.php?mod=space&uid=$item[uid]&do=album&picid=$item[picid]");
 			$fs['body_general'] = $item['title'];
 
-			$note_type = 'clickpic';
 			$q_note = 'click_pic';
 			$q_note_values = array(
 				'url'=>"home.php?mod=space&uid=$item[uid]&do=album&picid=$item[picid]",
@@ -155,7 +153,7 @@ if($_GET['op'] == 'add') {
 	require_once libfile('function/stat');
 	updatestat('click');
 
-	notification_add($item['uid'], $note_type, $q_note, $q_note_values);
+	notification_add($item['uid'], 'click', $q_note, $q_note_values);
 
 	showmessage('click_success', '', array('idtype' => $idtype, 'id' => $id, 'clickid' => $clickid), array('msgtype' => 3, 'showmsg' => true, 'closetime' => true));
 
@@ -174,16 +172,12 @@ if($_GET['op'] == 'add') {
 	$start = ($page-1)*$perpage;
 	if($start < 0) $start = 0;
 
-	$count = getcount('home_clickuser', array('id'=>$id, 'idtype'=>$idtype));
+	$count = C::t('home_clickuser')->count_by_id_idtype($id, $idtype);
 	$clickuserlist = array();
 	$click_multi = '';
 
 	if($count) {
-		$query = DB::query("SELECT * FROM ".DB::table('home_clickuser')."
-			WHERE id='$id' AND idtype='$idtype'
-			ORDER BY dateline DESC
-			LIMIT $start,$perpage");
-		while ($value = DB::fetch($query)) {
+		foreach(C::t('home_clickuser')->fetch_all_by_id_idtype($id, $idtype, $start, $perpage) as $value) {
 			$value['clickname'] = $clicks[$value['clickid']]['name'];
 			$clickuserlist[] = $value;
 		}

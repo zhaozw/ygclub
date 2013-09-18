@@ -4,7 +4,7 @@
  *      [Discuz!] (C)2001-2099 Comsenz Inc.
  *      This is NOT a freeware, use is subject to license terms
  *
- *      $Id: misc.php 22005 2011-04-20 01:45:07Z monkey $
+ *      $Id: misc.php 32082 2012-11-07 08:00:31Z zhengqingpeng $
  */
 
 define('APPTYPEID', 100);
@@ -13,10 +13,13 @@ define('CURSCRIPT', 'misc');
 
 require './source/class/class_core.php';
 
-$discuz = & discuz_core::instance();
+$discuz = C::app();
 
 $discuz->reject_robot();
-$modarray = array('seccode', 'secqaa', 'initsys', 'invite', 'faq', 'report', 'swfupload', 'manyou', 'stat', 'ranklist', 'buyinvitecode', 'tag', 'diyhelp', 'mobile');
+$modarray = array('seccode', 'secqaa', 'initsys', 'invite', 'faq', 'report',
+				'swfupload', 'manyou', 'stat', 'ranklist', 'buyinvitecode',
+				'tag', 'diyhelp', 'mobile', 'patch', 'getatuser', 'imgcropper',
+				'userstatus', 'signin');
 
 $modcachelist = array(
 	'ranklist' => array('forums', 'diytemplatename'),
@@ -39,6 +42,7 @@ $discuz->cachelist = $cachelist;
 switch ($mod) {
 	case 'secqaa':
 	case 'manyou':
+	case 'userstatus':
 	case 'seccode':
 		$discuz->init_cron = false;
 		$discuz->init_session = false;

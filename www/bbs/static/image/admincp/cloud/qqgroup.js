@@ -1,4 +1,4 @@
-var j = jQuery.noConflict();
+var cloudj = jQuery.noConflict();
 
 if (typeof disallowfloat == 'undefined' || disallowfloat === null) {
 	var disallowfloat = '';
@@ -6,10 +6,10 @@ if (typeof disallowfloat == 'undefined' || disallowfloat === null) {
 
 var currentNormalEditDisplay = 0;
 
-j(document).ready(function() {
+cloudj(document).ready(function() {
 	ajaxGetSearchResultThreads();
 
-	j('#previewForm').submit(function() {
+	cloudj('#previewForm').submit(function() {
 		return previewFormSubmit();
 	});
 
@@ -29,7 +29,7 @@ function previewFormSubmit() {
 
 	var i = 1;
 	for (var k = 1; k <= 5; k++) {
-		var input_displayorder = j('#normal_thread_' + k).find('.preview_displayorder');
+		var input_displayorder = cloudj('#normal_thread_' + k).find('.preview_displayorder');
 		if (input_displayorder.size()) {
 			input_displayorder.val(i);
 			i++;
@@ -39,39 +39,39 @@ function previewFormSubmit() {
 }
 
 function initSelect() {
-	var initTopicObj = j('#search_result .qqqun_op .qqqun_op_topon');
+	var initTopicObj = cloudj('#search_result .qqqun_op .qqqun_op_topon');
 	initTopicObj.addClass('qqqun_op_top');
 	initTopicObj.removeClass('qqqun_op_topon');
-	var initNormalObj = j('#search_result .qqqun_op .qqqun_op_liston');
+	var initNormalObj = cloudj('#search_result .qqqun_op .qqqun_op_liston');
 	initNormalObj.addClass('qqqun_op_list');
 	initNormalObj.removeClass('qqqun_op_liston');
 	selectedTopicId = parseInt(selectedTopicId);
 	if (selectedTopicId) {
-		j('#thread_addtop_' + selectedTopicId).addClass('qqqun_op_topon');
-		j('#thread_addtop_' + selectedTopicId).removeClass('qqqun_op_top');
+		cloudj('#thread_addtop_' + selectedTopicId).addClass('qqqun_op_topon');
+		cloudj('#thread_addtop_' + selectedTopicId).removeClass('qqqun_op_top');
 	}
-	j.each(selectedNormalIds, function(k, v) {
+	cloudj.each(selectedNormalIds, function(k, v) {
 		v = parseInt(v);
 		if (v) {
-			j('#thread_addlist_' + v).addClass('qqqun_op_liston');
-			j('#thread_addlist_' + v).removeClass('qqqun_op_list');
+			cloudj('#thread_addlist_' + v).addClass('qqqun_op_liston');
+			cloudj('#thread_addlist_' + v).removeClass('qqqun_op_list');
 		}
 	});
 }
 
 function ajaxChangeSearch() {
-	j('#srchtid').val('');
+	cloudj('#srchtid').val('');
 	ajaxGetSearchResultThreads();
 }
 
 function ajaxGetSearchResultThreads() {
-	j('#search_result').html('<tr><td colspan="3">加载中...</td></tr>');
+	cloudj('#search_result').html('<tr><td colspan="3">加载中...</td></tr>');
 	qqgroupajaxpost('search_form', 'search_result', 'search_result', null, null, function() {initSelect(); return false});
 	return false;
 }
 
 function ajaxGetPageResultThreads(page, mpurl) {
-	j('#search_result').html('<tr><td colspan="3">加载中...</td></tr>');
+	cloudj('#search_result').html('<tr><td colspan="3">加载中...</td></tr>');
 	if (typeof page == 'undefined' || page === null) {
 		page = 1;
 	}
@@ -83,7 +83,7 @@ function ajaxGetPageResultThreads(page, mpurl) {
 
 function addMiniportalTop(tid) {
 	tid = parseInt(tid);
-	if (j.inArray(tid, selectedNormalIds) > -1) {
+	if (cloudj.inArray(tid, selectedNormalIds) > -1) {
 		removeNormalThreadByTid(tid);
 	}
 	addMiniportalTopId(tid);
@@ -97,24 +97,24 @@ function addMiniportalTopId(tid) {
 
 function showPreviewEditor(topic, hideall) {
 	if (hideall) {
-		j('.qqqun_list .qqqun_editor').hide();
-		j('.qqqun_list .qqqun_xl li').removeClass('current');
-		j('.qqqun_list').removeClass('qqqun_list_editor');
-		j('.qqqun_top .qqqun_editor').hide();
-		j('.qqqun_top').removeClass('qqqun_top_editor');
+		cloudj('.qqqun_list .qqqun_editor').hide();
+		cloudj('.qqqun_list .qqqun_xl li').removeClass('current');
+		cloudj('.qqqun_list').removeClass('qqqun_list_editor');
+		cloudj('.qqqun_top .qqqun_editor').hide();
+		cloudj('.qqqun_top').removeClass('qqqun_top_editor');
 	} else {
 		if (topic) {
-			j('.qqqun_list .qqqun_editor').hide();
-			j('.qqqun_list .qqqun_xl li').removeClass('current');
-			j('.qqqun_list').removeClass('qqqun_list_editor');
-			j('.qqqun_top .qqqun_editor').show();
-			j('.qqqun_top').addClass('qqqun_top_editor');
+			cloudj('.qqqun_list .qqqun_editor').hide();
+			cloudj('.qqqun_list .qqqun_xl li').removeClass('current');
+			cloudj('.qqqun_list').removeClass('qqqun_list_editor');
+			cloudj('.qqqun_top .qqqun_editor').show();
+			cloudj('.qqqun_top').addClass('qqqun_top_editor');
 		} else {
-			j('.qqqun_list .qqqun_editor').show();
-			j('.qqqun_list').addClass('qqqun_list_editor');
-			j('.qqqun_list .qqqun_xl li').removeClass('current');
-			j('.qqqun_top .qqqun_editor').hide();
-			j('.qqqun_top').removeClass('qqqun_top_editor');
+			cloudj('.qqqun_list .qqqun_editor').show();
+			cloudj('.qqqun_list').addClass('qqqun_list_editor');
+			cloudj('.qqqun_list .qqqun_xl li').removeClass('current');
+			cloudj('.qqqun_top .qqqun_editor').hide();
+			cloudj('.qqqun_top').removeClass('qqqun_top_editor');
 		}
 	}
 
@@ -126,22 +126,22 @@ function clickTopicEditor(topicFocus) {
 	}
 	showPreviewEditor(true, false);
 	if (topicFocus == 'title') {
-		j('#topic-editor-input-title').addClass('pt_focus');
-		j('#topic-editor-input-title').focus();
+		cloudj('#topic-editor-input-title').addClass('pt_focus');
+		cloudj('#topic-editor-input-title').focus();
 	} else if (topicFocus == 'content') {
-		j('#topic-editor-textarea-content').addClass('pt_focus');
-		j('#topic-editor-textarea-content').focus();
+		cloudj('#topic-editor-textarea-content').addClass('pt_focus');
+		cloudj('#topic-editor-textarea-content').focus();
 	}
 	currentNormalEditDisplay = 0;
 }
 
 function blurTopic(obj) {
-	var thisobj = j(obj);
+	var thisobj = cloudj(obj);
 	thisobj.removeClass('pt_focus');
 }
 
 function clickNormalEditor(obj) {
-	var thisobj = j(obj);
+	var thisobj = cloudj(obj);
 	showPreviewEditor(false, false);
 	thisobj.addClass('pt_focus');
 	thisobj.focus();
@@ -149,18 +149,18 @@ function clickNormalEditor(obj) {
 }
 
 function blurNormalTextarea(obj) {
-	var thisobj = j(obj);
+	var thisobj = cloudj(obj);
 	liObj = thisobj.parent();
 	var displayorder = parseInt(liObj.attr('displayorder'));
 	if (displayorder == currentNormalEditDisplay) {
 		liObj.addClass('current');
 	}
-	j('.qqqun_list .qqqun_xl textarea').removeClass('pt_focus');
+	cloudj('.qqqun_list .qqqun_xl textarea').removeClass('pt_focus');
 }
 
 function addMiniportalList(tid) {
 	tid = parseInt(tid);
-	if (j.inArray(tid, selectedNormalIds) > -1) {
+	if (cloudj.inArray(tid, selectedNormalIds) > -1) {
 		return false;
 	}
 	if (selectedNormalIds.length >= 5) {
@@ -174,7 +174,7 @@ function addMiniportalList(tid) {
 	addMiniportalListId(tid);
 	initSelect();
 	var insertPos = 'normal_thread_' + selectedNormalIds.length;
-	ajaxget(adminscript + '?action=cloud&operation=qqgroup&anchor=block&op=getNormalThread&tid=' + tid, insertPos, null, null, null, function() { clickNormalEditor(j('#' + insertPos).find('textarea')); });
+	ajaxget(adminscript + '?action=cloud&operation=qqgroup&anchor=block&op=getNormalThread&tid=' + tid, insertPos, null, null, null, function() { clickNormalEditor(cloudj('#' + insertPos).find('textarea')); });
 }
 
 function addMiniportalListId(tid) {
@@ -182,7 +182,7 @@ function addMiniportalListId(tid) {
 }
 
 function editNormalThread() {
-	var threadLi = j('#normal_thread_' + currentNormalEditDisplay);
+	var threadLi = cloudj('#normal_thread_' + currentNormalEditDisplay);
 	clickNormalEditor(threadLi.find('textarea'));
 }
 
@@ -195,7 +195,7 @@ function saveAllThread() {
 
 function moveNormalThread(up) {
 	var displayorder = currentNormalEditDisplay;
-	var threadLi = j('#normal_thread_' + displayorder);
+	var threadLi = cloudj('#normal_thread_' + displayorder);
 	if (!threadLi.attr('id') || !displayorder) {
 		return false;
 	}
@@ -209,7 +209,7 @@ function moveNormalThread(up) {
 		return false;
 	}
 	var newLiId = 'normal_thread_' + newDisplayorder;
-	var newThreadLi = j('#' + newLiId);
+	var newThreadLi = cloudj('#' + newLiId);
 	if (!newThreadLi.find('textarea').size()) {
 		return false;
 	}
@@ -230,13 +230,13 @@ function removeTopicThread(tid) {
 
 function removeNormalThread() {
 	var displayorder = currentNormalEditDisplay;
-	var removeTid = parseInt(j('#normal_thread_' + displayorder).find('.normal_thread_tid').val());
+	var removeTid = parseInt(cloudj('#normal_thread_' + displayorder).find('.normal_thread_tid').val());
 	return removeNormalThreadByDisplayorderAndTid(displayorder, removeTid, true);
 }
 
 function removeNormalThreadByTid(tid) {
 	tid = parseInt(tid);
-	var threadInput = j('.qqqun_list .qqqun_xl .normal_thread_tid[value="' + tid + '"]');
+	var threadInput = cloudj('.qqqun_list .qqqun_xl .normal_thread_tid[value="' + tid + '"]');
 	if (threadInput.size()) {
 		var displayorder = threadInput.parent().attr('displayorder');
 		var removeTid = tid;
@@ -247,12 +247,12 @@ function removeNormalThreadByTid(tid) {
 function removeNormalThreadByDisplayorderAndTid(displayorder, removeTid, inNormalEditor) {
 	displayorder = parseInt(displayorder);
 	removeTid = parseInt(removeTid);
-	var threadLi = j('#normal_thread_' + displayorder);
+	var threadLi = cloudj('#normal_thread_' + displayorder);
 	if (!threadLi.attr('id') || !displayorder) {
 		return false;
 	}
 	threadLi.removeClass('current');
-	var index = j.inArray(removeTid, selectedNormalIds);
+	var index = cloudj.inArray(removeTid, selectedNormalIds);
 	if (index != -1) {
 		selectedNormalIds.splice(index, 1);
 	}
@@ -269,9 +269,9 @@ function removeNormalThreadRecall(displayorder, inNormalEditor) {
 		var currentDisplayorder = i;
 		var nextDisplayorder = i + 1;
 		var currentLiId = 'normal_thread_' + currentDisplayorder;
-		var currentThreadLi = j('#' + currentLiId);
+		var currentThreadLi = cloudj('#' + currentLiId);
 		var nextLiId = 'normal_thread_' + nextDisplayorder;
-		var nextThreadLi = j('#' + nextLiId);
+		var nextThreadLi = cloudj('#' + nextLiId);
 		if (nextThreadLi.find('textarea').size()) {
 			currentThreadLi.html(nextThreadLi.html());
 			currentThreadLi.show();
@@ -281,7 +281,7 @@ function removeNormalThreadRecall(displayorder, inNormalEditor) {
 			break;
 		}
 	}
-	var threadLi = j('#normal_thread_' + displayorder);
+	var threadLi = cloudj('#normal_thread_' + displayorder);
 	var prevDisplayorder = displayorder - 1;
 	if (threadLi.find('textarea').size()) {
 		if (inNormalEditor) {
@@ -289,13 +289,13 @@ function removeNormalThreadRecall(displayorder, inNormalEditor) {
 		}
 		currentNormalEditDisplay = displayorder;
 	} else if (prevDisplayorder) {
-		var prevThreadLi = j('#normal_thread_' + prevDisplayorder);
+		var prevThreadLi = cloudj('#normal_thread_' + prevDisplayorder);
 		if (inNormalEditor) {
 			prevThreadLi.addClass('current');
 		}
 		currentNormalEditDisplay = prevDisplayorder;
 	} else {
-		var firstThreadLi =  j('#normal_thread_1');
+		var firstThreadLi =  cloudj('#normal_thread_1');
 		if (inNormalEditor) {
 			saveAllThread();
 		}
@@ -305,20 +305,20 @@ function removeNormalThreadRecall(displayorder, inNormalEditor) {
 }
 
 function ajaxUploadQQGroupImage() {
-	j('#uploadImageResult').parent().show();
-	j('#uploadImageResult').text('图片上传中，请稍后...');
+	cloudj('#uploadImageResult').parent().show();
+	cloudj('#uploadImageResult').text('图片上传中，请稍后...');
 	qqgroupajaxpost('uploadImage', 'uploadImageResult', 'uploadImageResult', null, null, 'uploadRecall()');
 }
 
 function uploadRecall() {
-	if(j('#uploadImageResult').find('#upload_msg_success').size()) {
-		j('#uploadImageResult').parent().show();
+	if(cloudj('#uploadImageResult').find('#upload_msg_success').size()) {
+		cloudj('#uploadImageResult').parent().show();
 		var debug_rand = Math.random();
-		var imagePath = j('#uploadImageResult #upload_msg_imgpath').text();
-		var imageUrl = j('#uploadImageResult #upload_msg_imgurl').text();
-		j('#topic_image_value').val(imagePath);
-		j('#topic_editor_thumb').attr('src', imageUrl + '?' + debug_rand);
-		j('#topic_preview_thumb').attr('src', imageUrl + '?' + debug_rand);
+		var imagePath = cloudj('#uploadImageResult #upload_msg_imgpath').text();
+		var imageUrl = cloudj('#uploadImageResult #upload_msg_imgurl').text();
+		cloudj('#topic_image_value').val(imagePath);
+		cloudj('#topic_editor_thumb').attr('src', imageUrl + '?' + debug_rand);
+		cloudj('#topic_preview_thumb').attr('src', imageUrl + '?' + debug_rand);
 		setTimeout(function() {hideWindow('uploadImgWin');}, 2000);
 	}
 }
@@ -336,7 +336,7 @@ function qqgroupajaxpost(formid, showid, waitid, showidclass, submitbtn, recall)
 
 		showloading('none');
 
-		ajaxResponse = j('#' + ajaxframeid).contents().text();
+		ajaxResponse = cloudj('#' + ajaxframeid).contents().text();
 		var regex = /<\!\[CDATA\[(.*)\]\]>/;
 		var regexed = regex.exec(ajaxResponse);
 		if (regexed && regexed[1]) {
@@ -354,20 +354,20 @@ function qqgroupajaxpost(formid, showid, waitid, showidclass, submitbtn, recall)
 		}
 		if(showidclass) {
 			if(showidclass != 'onerror') {
-				j(showid).addClass(showidclass);
+				cloudj(showid).addClass(showidclass);
 			} else {
 				showError(s);
 				ajaxerror = true;
 			}
 		}
 		if(submitbtn) {
-			j(submitbtn).attr('disabled', false);
+			cloudj(submitbtn).attr('disabled', false);
 		}
 		if(!evaled && (typeof ajaxerror == 'undefined' || !ajaxerror)) {
 			ajaxinnerhtml($(showid), s);
 		}
 		ajaxerror = null;
-		j('#' + formid).attr('target', formtarget);
+		cloudj('#' + formid).attr('target', formtarget);
 		if(typeof recall == 'function') {
 			recall();
 		} else {
@@ -375,13 +375,13 @@ function qqgroupajaxpost(formid, showid, waitid, showidclass, submitbtn, recall)
 		}
 		if(!evaled) evalscript(s);
 		ajaxframe.loading = 0;
-		j(ajaxframe.parentNode).remove();
+		cloudj(ajaxframe.parentNode).remove();
 	};
 	if(!ajaxframe) {
-		var div = j('<div>');
+		var div = cloudj('<div>');
 		div.css('display', 'none');
 		div.html('<iframe name="' + ajaxframeid + '" id="' + ajaxframeid + '" loading="1">');
-		j('#append_parent').append(div);
+		cloudj('#append_parent').append(div);
 		ajaxframe = $(ajaxframeid);
 	} else if(ajaxframe.loading) {
 		return false;
@@ -390,13 +390,13 @@ function qqgroupajaxpost(formid, showid, waitid, showidclass, submitbtn, recall)
 	_attachEvent(ajaxframe, 'load', handleResult);
 
 	showloading();
-	j('#' + formid).attr('target', ajaxframeid);
-	var action = j('#' + formid).attr('action');
+	cloudj('#' + formid).attr('target', ajaxframeid);
+	var action = cloudj('#' + formid).attr('action');
 	action = hostconvert(action);
-	j('#' + formid).attr('action', action.replace(/\&inajax\=1/g, '')+'&inajax=1');
+	cloudj('#' + formid).attr('action', action.replace(/\&inajax\=1/g, '')+'&inajax=1');
 	$(formid).submit();
 	if(submitbtn) {
-		j(submitbtn).attr('disabled', true);
+		cloudj(submitbtn).attr('disabled', true);
 	}
 	doane();
 	return false;

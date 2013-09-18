@@ -1,18 +1,10 @@
-<!--{if !empty($_G['cache']['userapp'])}-->
-<ul id="my_defaultapp">
-	<!--{loop $_G['cache']['userapp'] $value}-->
-	<li><!--{if $value[appstatus]}--><span class="{if $value[appstatus]==1}appnew{else}apphot{/if}"></span><!--{/if}--><a href="userapp.php?mod=app&id=$value[appid]"><img {if $value[icon]}src="$value[icon]" onerror="this.onerror=null;this.src='http://appicon.manyou.com/icons/$value[appid]'"{else} src="http://appicon.manyou.com/icons/$value[appid]"{/if} alt="$value[appname]" />$value[appname]</a></li>
-	<!--{/loop}-->
-	<!--{hook/userapp_menu_top}-->
-</ul>
-<!--{/if}-->
-
 <!--{if !empty($_G['my_menu']) && !empty($_G['cache']['userapp'])}-->
 <hr class="da">
 <!--{/if}-->
 
 <!--{if !empty($_G['my_menu'])}-->
 <ul id="my_userapp">
+	<!--{hook/userapp_menu_top}-->
 	<!--{loop $_G['my_menu'] $value}-->
 	<li id="userapp_li_$value[appid]"><!--{if $value[appstatus]}--><span class="{if $value[appstatus]==1}appnew{else}apphot{/if}"></span><!--{/if}--><a href="userapp.php?mod=app&id=$value[appid]" title="$value[appname]"><img {if $value[icon]}src="$value[icon]" onerror="this.onerror=null;this.src='http://appicon.manyou.com/icons/$value[appid]'"{else} src="http://appicon.manyou.com/icons/$value[appid]"{/if} alt="$value[appname]" />$value[appname]</a></li>
 	<!--{/loop}-->

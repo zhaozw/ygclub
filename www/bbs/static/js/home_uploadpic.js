@@ -1,8 +1,8 @@
 /*
-	[Discuz!] (C)2001-2009 Comsenz Inc.
+	[Discuz!] (C)2001-2099 Comsenz Inc.
 	This is NOT a freeware, use is subject to license terms
 
-	$Id: home_uploadpic.js 17964 2010-11-09 01:11:24Z monkey $
+	$Id: home_uploadpic.js 32590 2013-02-22 09:42:48Z monkey $
 */
 
 var attachexts = new Array();
@@ -34,13 +34,13 @@ function addAttach() {
 	var id = nowid;
 	var tags;
 	tags = newnode.getElementsByTagName('form');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].id == 'upload') {
 			tags[i].id = 'upload_' + id;
 		}
 	}
 	tags = newnode.getElementsByTagName('input');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].name == 'attach') {
 			tags[i].id = 'attach_' + id;
 			tags[i].name = 'attach';
@@ -52,7 +52,7 @@ function addAttach() {
 		}
 	}
 	tags = newnode.getElementsByTagName('span');
-	for(i in tags) {
+	for(i = 0;i < tags.length;i++) {
 		if(tags[i].id == 'localfile') {
 			tags[i].id = 'localfile_' + id;
 		}
