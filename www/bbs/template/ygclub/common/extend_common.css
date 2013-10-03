@@ -2,7 +2,7 @@ body {
 background:#67b400;
 }
 .wp {
-width: 1246px;
+width:90%;
 }
 #hd, .hdc {
 background: #FFF;
@@ -12,7 +12,6 @@ background: #FFF;
 color: white;
 }
 #toptb {
-min-width: 960px;
 border-bottom: 0;
 background: #FDFDFD;
 line-height: 28px;
@@ -119,7 +118,6 @@ background: url({IMGDIR}/search.png) no-repeat 0 -193px;
 background: url({STYLEIMGDIR}/search2.png) no-repeat 8px -142px;
 }
 .singsg_box {
-min-width: 960px;
 background: #FFF;
 padding: 10px 20px;
 margin-top: 0;
@@ -245,7 +243,7 @@ color: #111;
 }
 
 .ct2_a .mn {
-	width:1050px;
+width:80%;
 }
 
 .frame-tab .tb li, .frame-tab .tb a{
@@ -258,4 +256,7 @@ color: #111;
 
 .module ul li {
 	border-bottom:1px dashed #EFEFEF;
+}
+
+.ct2 .mn {
 }

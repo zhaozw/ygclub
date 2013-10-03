@@ -2,7 +2,9 @@
 	<!--{if $_G[setting][homepagestyle]}-->
 		<!--{template common/header}-->
 		<div id="ct" class="ct2 wp cl">
-		<div class="mn" style="float:right;width:960px">
+		<div class="sd" style="float:left;margin-top:10px;width:auto;">
+				<!--{subtemplate home/space_userabout}-->
+		<div class="mn" style="float:left;margin-left:10px;width:80%">
 				<div class="bm">
 					<div class="bm_h">
 						<!--{if $space[self]}--><span class="xi2 y"><a href="forum.php?mod=misc&action=nav" onclick="showWindow('nav', this.href, 'get', 0)" class="addnew">{lang posted}</a></span><!--{/if}-->
@@ -189,8 +191,6 @@
 				</div>
 			<!--{if $_G[setting][homepagestyle]}-->
 			</div>
-		<div class="sd" style="float:left;margin-top:1px;">
-				<!--{subtemplate home/space_userabout}-->
 			<!--{/if}-->
 		<!--{/if}-->
 		</div>
