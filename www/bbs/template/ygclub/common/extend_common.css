@@ -5,7 +5,8 @@ background:#67b400;
 width:90%;
 }
 #hd, .hdc {
-background: #FFF;
+background: url({STYLEIMGDIR}/banner.png) no-repeat 30% 1px #FFF;
+background-attachment: fixed;
 }
 
 #nav, #nav a {

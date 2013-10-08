@@ -11,6 +11,9 @@ background: #cee3c2;}
 /** end **/
 /** forum::forumdisplay,forum::viewthread,forum::modcp,forum::collection,group,home::space,home::task,home::follow,search::forum,search::group,member::groupexpiry,misc::ranklist,misc::stat,misc::tag,forum::guide,portal::block **/
 /* tl --> Thread list modify by lushnis */
+body{
+  background: #67b400 none !important;
+}
 .tl th .tdpre, .tl td.fn .tdpre { background-image: url({STYLEIMGDIR}/preview.png); }
 .tl th, .tl td {
 	padding: 5px 0;
@@ -18,5 +21,9 @@ background: #cee3c2;}
 }
 .tl th em, .tl th em a {
 	color: #669900;
+}
+#nv_search #ft {
+  margin: 0px !important;
+  text-align: left !important;
 }
 /** end **/
