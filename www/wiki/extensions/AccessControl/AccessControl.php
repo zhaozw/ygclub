@@ -91,7 +91,6 @@ function displayGroups() {
 	/* Function replace the tag <accesscontrol> and his content, behind info about a protection this the page */
 	$style = "<p id=\"accesscontrol\" style=\"text-align:center;color:#BA0000;font-size:8pt\">";
 	$text = wfMsg( 'accesscontrol-info' );
-	$text = ;
 	$style_end = "</p>";
 	$wgAllowInfo = $style . $text . $style_end;
 	return $wgAllowInfo;
@@ -169,7 +168,6 @@ function getUsersFromPages( $skupina ) {
 function doRedirect( $info ) {
 	/* make redirection for non authorized users */
 	global $wgScript, $wgSitename, $wgOut;
-
 	return false;
 
 	if ( ! $info ) {
