@@ -645,7 +645,7 @@ class SkinTemplate extends Skin {
 			);
 			$personal_urls['logout'] = array(
 				'text' => $this->msg( 'userlogout' )->text(),
-				'href' => '/bbs/member.php?mod=logging&action=login',
+				'href' => '/bbs/member.php?mod=logging&action=logout',
 				'active' => false
 			);
 		} else {
