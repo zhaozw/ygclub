@@ -754,7 +754,7 @@ function ygclub_party_getstatus_txt($verified)
 function ygclub_party_isadmin()
 {
     global $_G, $party;
-    if($_G['adminid'] == 1 || $_G['adminid'] == 2 || $_G['uid'] == $party['uid']) {
+    if($_G['adminid'] == 1 || $_G['adminid'] == 2 || $_G['adminid'] == 3 || $_G['uid'] == $party['uid']) {
         return true;
     }
     else
