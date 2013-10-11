@@ -9,6 +9,7 @@
 
 include_once('func.inc.php');
 
+
 class threadplugin_ygclub_party {
     var $name = '';
     var $iconfile = 'images/icon.gif';
@@ -233,8 +234,9 @@ class threadplugin_ygclub_party {
 
         $party['_approved_username_list_html'] = join(', ', $party['_approved_username_list_html']);
         $party['_checkin_username_list_html'] = join(', ', $party['_checkin_username_list_html']);
-
-        if($_G['adminid'] == 1 || $_G['adminid'] == 2 || $_G['uid'] == $party['uid']) {
+        
+        if(ygclub_party_isadmin($party))
+        {
             $party['_mPerm'] = 1;
         }
        
@@ -254,6 +256,24 @@ class threadplugin_ygclub_party {
         }
         return $party;
     }
+
+}
+
+function ygclub_party_isadmin($party = array())
+{
+    global $_G;
+    if($_G['adminid'] == 1 || $_G['adminid'] == 2 || $_G['uid'] == $party['uid']) {
+        return true;
+    }
+    elseif($_G['adminid'] == 3)
+    {
+        $forum_moderator = C::t('forum_moderator')->fetch_all_by_fid($party['fid'], false);
+        if($forum_moderator[$_G['uid']])
+        {
+            return true;
+        }
+    }
+    return false;
 
 }
 ?>

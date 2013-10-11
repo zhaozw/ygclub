@@ -15,6 +15,8 @@ if(!defined('IN_DISCUZ')) {
 
 define('NOROBOT', TRUE);
 
+include_once('thread.class.php');
+
 // 申请参加活动
 if($_POST['action'] == 'partyapplies')
 {
@@ -26,7 +28,6 @@ if($_POST['action'] == 'partyapplies')
         $tid = $_POST['tid'];
 
         //$party = C::t('#ygclub_party#party')->fetch($tid);
-        include_once('thread.class.php');
         $party_thread = new threadplugin_ygclub_party();
         $party = $party_thread->_getpartyinfo($tid);
 
@@ -103,16 +104,16 @@ if($_POST['action'] == 'partyinvite')
     if(!$_G['uid']) {
         showmessage('not_loggedin', '', array(), array('login' => true));
     }
-    if(!ygclub_party_isadmin()) {
-        showmessage('没有权限邀请好友参加活动');
-    }
     if(submitcheck('partysubmit')) {
 
         $tid = $_POST['tid'];
 
-        include_once('thread.class.php');
         $party_thread = new threadplugin_ygclub_party();
         $party = $party_thread->_getpartyinfo($tid);
+    
+        if(!ygclub_party_isadmin($party)) {
+            showmessage('没有权限邀请好友参加活动');
+        }
 
         if(!$party){
             showmessage('ygclub_party:party_not_valid');
@@ -285,7 +286,6 @@ elseif($_GET['act'] == 'list')
         $result_list = array();
         if($tid > 0 && is_numeric($tid))
         {
-            include_once('thread.class.php');
             $party_thread = new threadplugin_ygclub_party();
             $party = $party_thread->_getpartysummary($tid);
             $condata = $party_thread->_load_forumparty_condata($party['fid']);
@@ -316,7 +316,7 @@ elseif($_GET['act'] == 'list')
                 $apply_list[$partyer[pid]] = $partyer;
             }
 
-            if(ygclub_party_isadmin()) {
+            if(ygclub_party_isadmin($party)) {
                 $mPerm = 1;
             }
         }
@@ -340,14 +340,13 @@ elseif($_GET['act'] == 'operate'){
             if($tid > 0 && $pid > 0 && $_G['uid'] > 0) {
                 $goUrl = 'forum.php?mod=viewthread&tid='.$tid;
                 $party = C::t('#ygclub_party#party')->fetch($tid);
-                if(ygclub_party_isadmin()) {
+                if(ygclub_party_isadmin($party)) {
                     $mPerm = 1;
                 }
                 if($party['closed']==1){
                     showmessage("此活动已结束，不能进行相关的操作");
                 }
                 else{
-                    include_once('thread.class.php');
                     $party_thread = new threadplugin_ygclub_party();
 
                     if($for == 'nexttime')
@@ -440,7 +439,8 @@ elseif($_GET['act'] == 'onoff'){
     }
     if(submitcheck('close_open_party_submit')){
         $tid = $_GET['tid'];
-        if(ygclub_party_isadmin()) {
+        $party = C::t('#ygclub_party#party')->fetch($tid);
+        if(ygclub_party_isadmin($party)) {
             $goUrl = 'forum.php?mod=viewthread&tid='.$tid;
             if($_GET['for'] == 'on'){
                 $updateData['closed'] = 0;
@@ -461,9 +461,8 @@ elseif($_GET['act'] == 'print'){
     }
 
     $tid = $_GET['tid'];
-    if(ygclub_party_isadmin()) {
-        $party = C::t('#ygclub_party#party')->fetch($tid);
-
+    $party = C::t('#ygclub_party#party')->fetch($tid);
+    if(ygclub_party_isadmin($party)) {
         if(!$party){
             showmessage('ygclub_party:party_not_valid');
         }
@@ -522,12 +521,11 @@ elseif($_GET['act'] == 'editp')
     $pid = intval($_GET['pid']);
     if($pid > 0) {
         $partyer = C::t('#ygclub_party#partyers')->fetch($pid);
-        if($partyer && (ygclub_party_isadmin() || ($partyer['verified'] == 1 && $partyer['uid'] == $_G['uid'])))
+        $party_thread = new threadplugin_ygclub_party();
+        $party = $party_thread->_getpartysummary($partyer['tid']);
+        if($partyer && (ygclub_party_isadmin($party) || ($partyer['verified'] == 1 && $partyer['uid'] == $_G['uid'])))
         {
             $partyer['_config'] = unserialize($partyer['confi']);
-            include_once('thread.class.php');
-            $party_thread = new threadplugin_ygclub_party();
-            $party = $party_thread->_getpartysummary($partyer['tid']);
             $condata = $party_thread->_load_forumparty_condata($party['fid']);
             $partyer['_dateline'] = dgmdate($partyer['dateline'], 'u');
             $partyer['_avatar'] = avatar($partyer[uid], 'small');
@@ -557,9 +555,9 @@ elseif($_GET['act'] == 'relec'){
     }
 
     $tid = $_GET['tid'];
-    if(ygclub_party_isadmin()) {
+    $party = C::t('#ygclub_party#party')->fetch($tid);
+    if(ygclub_party_isadmin($party)) {
         $tinfo = DB::fetch_first("select subject from " . DB::table('forum_thread') . " where tid='$tid'");
-        $party = C::t('#ygclub_party#party')->fetch($tid);
 
         if(!$party){
             showmessage('ygclub_party:party_not_valid');
@@ -616,12 +614,13 @@ elseif($_GET['act']=='checkin'){
     if(!$_G['uid']) {
         showmessage('not_loggedin', '', array(), array('login' => true));
     }
-    if(ygclub_party_isadmin()) {
-        $mPerm = 1;
-    }
     $tid = $_GET['tid'];
     $tinfo = DB::fetch_first("select subject from " . DB::table('forum_thread') . " where tid='$tid'");
     $party = C::t('#ygclub_party#party')->fetch($tid);
+    if(ygclub_party_isadmin($party)) {
+        $mPerm = 1;
+    }
+
      if(!$party){
          showmessage('ygclub_party:party_not_valid');
     }
@@ -714,7 +713,7 @@ elseif($_GET['act']=='checkin'){
     }
     else
     {
-        if(!ygclub_party_isadmin()) {
+        if(!ygclub_party_isadmin($party)) {
             showmessage('没有权限编辑签到信息');
         }
 
@@ -751,16 +750,4 @@ function ygclub_party_getstatus_txt($verified)
     return $verifiedArr[$verified];
 }
 
-function ygclub_party_isadmin()
-{
-    global $_G, $party;
-    if($_G['adminid'] == 1 || $_G['adminid'] == 2 || $_G['adminid'] == 3 || $_G['uid'] == $party['uid']) {
-        return true;
-    }
-    else
-    {
-        return false;
-
-    }
-}
 ?>
