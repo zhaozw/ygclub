@@ -43,7 +43,7 @@ function wfAccessControlExtension( Parser $parser ) {
 	return true;
 }
 
-function doControlUserAccess( $input, array $args, Parser $parser, PPFrame $frame ) {
+function doControlUserAccess( $input, array $args, Parser $parser) {
 	/* Funcion called by wfAccessControlExtension */
 	return displayGroups();
 }
