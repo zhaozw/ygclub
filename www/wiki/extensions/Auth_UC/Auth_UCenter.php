@@ -46,6 +46,7 @@
 error_reporting(E_ALL); // Debug
 include './extensions/Auth_UC/config.inc.php';
 include './extensions/Auth_UC/uc_client/client.php';
+require 'JWT.php';
 // First check if class has already been defined.
 if (!class_exists('AuthPlugin'))
 {
@@ -109,6 +110,15 @@ function uc_login_hook() {
 
 
 	//	$ygclub_username=uc_id2name($ygclub_uid);
+
+	$token = array(
+		"short_name"=>"ygwiki",
+		"user_key"=>$ygclub_uid,
+		"name"=>$ygclub_username,
+	);
+	$wgDuoshuoSecret = '9d19f04122e26bddb9cca306197d7a04';
+	$duoshuoToken = JWT::encode($token, $wgDuoshuoSecret);
+	setcookie('duoshuo_token',  $duoshuoToken);
 
 
 	// For a few special pages, don't do anything.
