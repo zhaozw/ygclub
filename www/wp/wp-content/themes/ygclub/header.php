@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="keywords" content="志愿者,ygclub,北京,流动儿童,阳光志愿者,阳光志愿者俱乐部,阳光义教,阳光义教俱乐部,打工子弟,留守儿童,爱心,非营利性组织,NGO,农民工,支教,志教,志愿教育" />
+<meta name="keywords" content="志愿者,ygclub,北京,流动儿童,阳光志愿者,阳光志愿者俱乐部,阳光义教,阳光义教俱乐部,打工子弟,留守儿童,爱心,非营利性组织,NGO,农民工,支教,志教,志愿教育,公益,教育,公益教育" />
 <meta name="description" content="北京阳光志愿者俱乐部（简称“阳光志愿者”或LEAD）是一个独立运作、专注于为流动儿童教育提供志愿教育机会的纯“草根”志愿者组织。" />
 <title>
 <?php if (is_home()) {
